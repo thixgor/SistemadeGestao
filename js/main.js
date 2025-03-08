@@ -67,10 +67,10 @@ function showEmailModal() {
         const modalHTML = `
             <div id="emailModal" class="modal license-modal">
                 <div class="modal-content dark-theme">
-                    <h2>Ativação do Sistema</h2>
+                    <h2>ControlXpert</h2>
                     <div class="license-info">
-                        <p><strong>Sistema de Gestão Empresarial</strong></p>
-                        <p>Para continuar, insira seu email</p>
+                        <p><strong>Sistema de Gestão</strong></p>
+                        <p>Para continuar, insira seu email autenticado.</p>
                     </div>
                     <form id="emailForm">
                         <div class="form-group">
