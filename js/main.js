@@ -1,3 +1,93 @@
+// Valid license keys
+const validLicenseKeys = [
+    '9UOS-20PQ-35FH', '318Q-HPGH-FDXC', 'PCAG-EJIX-ATYX', 'BF49-D8KX-CG98',
+    'IXUS-G0JQ-BL42', '9RSV-0LRT-LEIV', '14LM-5Q43-6K11', 'S18E-OPAG-MPLR',
+    'R6GQ-PJS7-N0HX', 'E3J6-8E2G-DMC4', 'PDEO-IZMO-UZ5F', '80B9-DS48-JEKF',
+    'WP20-9R9S-OCCO', 'L0NA-D4YZ-0VQL', 'Q090-MWGS-8A2T', '9YYG-D9HB-GH7O',
+    'C2WG-DSRC-W67N', 'V4EU-1QO4-ZFUC', 'TF1L-XZA6-DF5U', 'ZFPM-4CR3-D4CV',
+    'OUJW-BECP-LNKY', 'BOBK-J81U-10XA', '3VNW-S3JL-7VZI', 'NU8V-YFH3-9GJN',
+    '98DS-Q2N8-R1F1', 'XP3Z-LPFV-VERB', 'D4FT-996G-P05S', 'XK4M-HXEC-8H6L',
+    '1EQO-MCUE-MHDI', 'LPXK-Q1GW-CMRZ', 'TKEX-O1Z3-SNVO', 'KVSN-EK0E-WAZX',
+    'WMQE-X7HM-8829', 'NKF4-W48O-YKZL', '6VM3-VEC5-7JQW', 'BKJD-66L0-ADBS',
+    '0HKW-JMOA-728R', 'BTQ5-4GB0-2MDN', '590I-LEPE-ZSA1', 'HN4W-2N04-I81F',
+    'SOE8-MUHI-EI6W', 'KW3M-HPY3-5WAT', 'N66H-JIEL-4UA8', 'ZOD4-A2QY-1ZOS',
+    'EJ3F-U7I6-54J3', 'J0OS-YR9S-3CCH', '436Z-MEZI-VTC6', 'TYJD-Y9ZX-5NP3',
+    'FFXV-IZ4G-CNWS', 'YRZY-2JEC-JU4I', 'XG2C-KV3A-DAY8', 'J6HM-CEIV-BO2X',
+    'W0KA-AWPZ-R59V', '2YH6-HYGE-0L1M', 'RLLD-1T7M-ETH5', 'RBJT-MJ3J-AZVA',
+    'TH11-OS3Y-5NHK', 'M1X7-SFQS-EYGD', 'PWO5-K5X3-ZVX1', 'C5QM-R6GZ-0O0Z',
+    'WCGU-5HH4-8K9H', '9N2Q-NMTK-1IEM', '5XF9-QMUR-6RM0', 'L4LU-ZM41-GURW',
+    'ATSQ-A535-VXZ7', 'EEKD-V04L-8Z69', 'FGIA-KA15-U1YD', 'D9S0-KE7Q-7DGQ',
+    'HKDW-ZBIV-J8F2', '18K3-KCJS-YG2C', 'WS5K-26K5-UE60', '4EB3-B5TF-OKAG',
+    '8HVP-ZLO5-E27O', '52DM-8MXQ-052W', 'I6FN-FWSF-EZ5U', 'Y9OT-M588-EBMO',
+    '25V6-ZQ50-GV3O', 'RU1N-XQCH-HDDJ', 'YGYE-2Q6K-AOMA', '4UJ2-JZW9-HTTS',
+    'G2WJ-VYIO-UAKE', '5MLL-V1LZ-TIVA', 'FOO2-MPLH-KY8W', 'CNZ3-2SKX-KTHS',
+    'Q1D8-0S0O-1M7M', 'DRHU-FTI5-JLG8', 'PEEV-VGO2-8CD1', 'L8B1-TF1P-FFTX',
+    'ZVPG-O38K-JU7D', 'NJ2Z-Y6GC-5VSE', '9V3I-9CA0-ZKNG', 'V1AB-68Y1-2NV9',
+    '7QRQ-OIEE-JREW', '2SBJ-YK61-0Z96', 'VP8R-C62G-HTGJ', 'EB22-HMR2-B79I',
+    'FQHD-OBPA-EEAE', 'T1X8-Z14Z-JMML', 'YF01-EIPY-C2UI', 'OQX4-5GA2-KD9I'
+];
+
+// Check if system is licensed
+function checkLicense() {
+    const licenseKey = localStorage.getItem('licenseKey');
+    if (!licenseKey || !validLicenseKeys.includes(licenseKey)) {
+        showLicenseModal();
+        return false;
+    }
+    return true;
+}
+
+// Show license modal
+function showLicenseModal() {
+    const modal = document.getElementById('licenseModal');
+    modal.classList.add('active');
+    
+    // Prevent closing by clicking outside
+    modal.onclick = (e) => {
+        if (e.target === modal) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }
+    };
+
+    // Format license key input
+    const licenseInput = document.getElementById('licenseKey');
+    licenseInput.addEventListener('input', (e) => {
+        let value = e.target.value.replace(/[^A-Z0-9]/g, '');
+        if (value.length > 12) value = value.slice(0, 12);
+        const parts = [];
+        for (let i = 0; i < value.length; i += 4) {
+            parts.push(value.slice(i, i + 4));
+        }
+        e.target.value = parts.join('-');
+    });
+
+    // Handle license form submission
+    document.getElementById('licenseForm').onsubmit = (e) => {
+        e.preventDefault();
+        const key = licenseInput.value;
+        
+        if (validLicenseKeys.includes(key)) {
+            localStorage.setItem('licenseKey', key);
+            modal.classList.remove('active');
+            initializeSystem();
+        } else {
+            // Show error message
+            let errorDiv = modal.querySelector('.license-error');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.className = 'license-error';
+                licenseInput.parentNode.insertBefore(errorDiv, licenseInput.nextSibling);
+            }
+            errorDiv.textContent = 'Chave de licença inválida!';
+            errorDiv.classList.add('active');
+            setTimeout(() => errorDiv.classList.remove('active'), 3000);
+            licenseInput.value = '';
+        }
+    };
+}
+
 let inventoryItems = JSON.parse(localStorage.getItem('inventoryItems')) || [];
 let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
 let currentOrderProducts = [];
@@ -25,7 +115,9 @@ const addExitBtn = document.getElementById('addExit');
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-    initializeSystem();
+    if (checkLicense()) {
+        initializeSystem();
+    }
 });
 
 function initializeSystem() {
