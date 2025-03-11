@@ -1,36 +1,32 @@
-exports.handler = async function (event) {
+// netlify/functions/fetchEmails.js
+exports.handler = async (event, context) => {
     try {
-        const PASTEBIN_RAW_URL = "https://pastebin.com/raw/C9SxPnwZ";
+        // URL única da lista de emails (substitua com sua URL)
+        const EMAIL_LIST_URL = 'https://pastebin.com/raw/C9SxPnwZ';
         
-        const response = await fetch(PASTEBIN_RAW_URL, { method: 'GET' });
+        // Faz o fetch da lista de emails
+        const response = await fetch(EMAIL_LIST_URL);
+        
         if (!response.ok) {
-            return {
-                statusCode: response.status,
-                body: JSON.stringify({ error: "Falha ao buscar os e-mails." })
-            };
+            throw new Error('Erro ao carregar lista de emails');
         }
-        
-        const text = await response.text();
-        const emails = text.split('\n').map(email => email.trim()).filter(email => email);
-        
-        if (event.httpMethod === "GET") {
-            return {
-                statusCode: 200,
-                body: JSON.stringify({ allowedEmails: emails })
-            };
-        }
-        
-        const { email } = JSON.parse(event.body || '{}');
-        const exists = emails.includes(email);
-        
+
+        // Pega o conteúdo e divide em linhas
+        const data = await response.text();
+        const emails = data.split('\n').map(email => email.trim().toLowerCase());
+
+        // Verifica se o email existe na lista
+        const emailToCheck = event.queryStringParameters.email?.trim().toLowerCase();
+        const exists = emails.includes(emailToCheck);
+
         return {
             statusCode: 200,
-            body: JSON.stringify({ exists })
+            body: JSON.stringify({ exists }),
         };
     } catch (error) {
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: "Erro interno do servidor." })
+            body: JSON.stringify({ error: error.message || 'Erro interno' }),
         };
     }
 };
