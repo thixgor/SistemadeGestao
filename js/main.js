@@ -1,4 +1,3 @@
-// Data structure for storing inventory items
 let inventoryItems = JSON.parse(localStorage.getItem('inventoryItems')) || [];
 let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
 let currentOrderProducts = [];
@@ -39,8 +38,8 @@ async function validateEmail(email) {
     }
 
     try {
-        // Tenta buscar a lista de emails permitidos
-        const response = await fetch('https://pastebin.com/raw/C9SxPnwZ', {
+        // Tenta buscar a lista de emails permitidos via Netlify Function
+        const response = await fetch('/.netlify/functions/fetchUsers', {
             method: 'GET',
             cache: 'no-cache'
         });
@@ -49,12 +48,12 @@ async function validateEmail(email) {
             throw new Error('Erro ao validar email');
         }
 
-        const allowedEmails = await response.text();
-        return allowedEmails.trim().split('\n').includes(email.trim());
+        const data = await response.json();
+        return data.allowedEmails.includes(email.trim());
     } catch (error) {
         console.error('Erro ao validar email:', error);
         // Em caso de erro de conexão, validar offline
-        const offlineEmails = ['throdrigf@gmail.com'];
+        const offlineEmails = ['hookeybr@gmail.com'];
         return offlineEmails.includes(email.trim());
     }
 }
@@ -67,10 +66,10 @@ function showEmailModal() {
         const modalHTML = `
             <div id="emailModal" class="modal license-modal">
                 <div class="modal-content dark-theme">
-                    <h2>ControlXpert</h2>
+                    <h2>ControlXpert 2025</h2>
                     <div class="license-info">
-                        <p><strong>Sistema de Gestão</strong></p>
-                        <p>Para continuar, insira seu email autenticado.</p>
+                        <p><strong>Sistema de Gestão Empresarial</strong></p>
+                        <p>Para continuar, insira seu email</p>
                     </div>
                     <form id="emailForm">
                         <div class="form-group">
@@ -155,6 +154,7 @@ function initializeSystem() {
     loadDataFromStorage();
     setupEventListeners();
     initializeCharts();
+    setupSearchSections();
     renderInventoryTable();
     renderTransactionsTable();
     updateDashboardStats();
@@ -201,7 +201,7 @@ function setupEventListeners() {
     createOrderBtn?.addEventListener('click', createOrder);
     addEntryBtn?.addEventListener('click', () => openTransactionModal('entry'));
     addExitBtn?.addEventListener('click', () => openTransactionModal('exit'));
-    resetSystemBtn?.addEventListener('click', resetSystem);
+    resetSystemBtn?.addEventListener('click', showResetVault);
 
     // Creator Info
     const creatorBtn = document.getElementById('creatorInfo');
@@ -216,7 +216,13 @@ function setupEventListeners() {
 
     // Forms
     productForm?.addEventListener('submit', handleProductSubmit);
-    document.getElementById('transactionForm')?.addEventListener('submit', handleTransactionSubmit);
+    const transactionForm = document.getElementById('transactionForm');
+    if (transactionForm) {
+        transactionForm.addEventListener('submit', handleTransactionSubmit);
+        console.log('Transaction form submit event listener added'); // Debug log
+    } else {
+        console.error('Transaction form not found'); // Debug log
+    }
 
     // Report buttons
     document.getElementById('salesReportBtn')?.addEventListener('click', generateSalesReport);
@@ -263,37 +269,96 @@ function showSection(sectionId) {
     document.querySelector(`[data-section="${sectionId}"]`).classList.add('active');
 }
 
-// Reset System
-function resetSystem() {
-    if (confirm('Tem certeza que deseja resetar todo o sistema? Esta ação não poderá ser desfeita.')) {
-        const email = localStorage.getItem('userEmail'); // Salva o email atual
-        const userName = localStorage.getItem('userName'); // Salva o nome do usuário também
-        
-        localStorage.clear(); // Limpa todo o localStorage
-        
-        // Restaura o email e o nome do usuário
-        localStorage.setItem('userEmail', email);
-        localStorage.setItem('userName', userName);
-        
-        inventoryItems = [];
-        transactions = [];
-        updateDashboardStats();
-        renderInventoryTable();
-        renderTransactionsTable();
-        initializeCharts();
-        updateWelcomeName(userName);
-        alert('Sistema resetado com sucesso!');
+// Reset System with Vault
+function showResetVault() {
+    const modal = document.getElementById('resetVaultModal');
+    const display = document.getElementById('vaultPassword');
+    const buttons = modal.querySelectorAll('.vault-btn');
+    let currentPassword = '';
+    const correctPassword = '0000';
+
+    // Reset display
+    display.textContent = '****';
+    
+    // Remove existing error message if any
+    const existingError = modal.querySelector('.vault-error');
+    if (existingError) {
+        existingError.remove();
     }
+
+    // Add event listeners to buttons
+    buttons.forEach(button => {
+        button.onclick = (e) => {
+            if (button.classList.contains('vault-clear')) {
+                // Clear button
+                currentPassword = '';
+                display.textContent = '****';
+            } else if (button.classList.contains('vault-enter')) {
+                // Enter button
+                if (currentPassword === correctPassword) {
+                    closeModal('resetVaultModal');
+                    executeReset();
+                } else {
+                    // Show error message
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'vault-error';
+                    errorDiv.textContent = 'Senha incorreta!';
+                    modal.querySelector('.modal-content').appendChild(errorDiv);
+                    
+                    // Clear password
+                    currentPassword = '';
+                    display.textContent = '****';
+                    
+                    // Add and remove active class for animation
+                    errorDiv.classList.add('active');
+                    setTimeout(() => errorDiv.classList.remove('active'), 500);
+                }
+            } else {
+                // Number button
+                if (currentPassword.length < 4) {
+                    const number = button.dataset.number;
+                    currentPassword += number;
+                    display.textContent = currentPassword.padEnd(4, '*');
+                }
+            }
+        };
+    });
+
+    modal.classList.add('active');
+}
+
+function executeReset() {
+    const email = localStorage.getItem('userEmail'); // Salva o email atual
+    const userName = localStorage.getItem('userName'); // Salva o nome do usuário também
+    
+    localStorage.clear(); // Limpa todo o localStorage
+    
+    // Restaura o email e o nome do usuário
+    localStorage.setItem('userEmail', email);
+    localStorage.setItem('userName', userName);
+    
+    inventoryItems = [];
+    transactions = [];
+    updateDashboardStats();
+    renderInventoryTable();
+    renderTransactionsTable();
+    initializeCharts();
+    updateWelcomeName(userName);
+    alert('Sistema resetado com sucesso!');
 }
 
 // Transaction Modal Functions
 function openTransactionModal(type) {
+    console.log('Opening transaction modal for type:', type); // Debug log
+    
     const modal = document.getElementById('transactionModal');
     const title = document.getElementById('transactionModalTitle');
     const clientField = document.getElementById('clientField');
     const sellerField = document.getElementById('sellerField');
     const paymentMethodField = document.getElementById('paymentMethodField');
     const installmentsField = document.getElementById('installmentsField');
+    const form = document.getElementById('transactionForm');
+    const saveButton = modal.querySelector('.save-btn');
 
     // Reset current transaction products
     currentTransactionProducts = [];
@@ -317,55 +382,103 @@ function openTransactionModal(type) {
     // Setup add product button
     document.getElementById('addTransactionProduct').onclick = showAddTransactionProductModal;
 
+    // Set the transaction type
     modal.dataset.type = type;
+    console.log('Modal type set to:', modal.dataset.type); // Debug log
+
+    // Reset form and event listeners
+    form.reset();
+    form.removeEventListener('submit', handleTransactionSubmit);
+    saveButton.removeEventListener('click', handleTransactionSubmit);
+
+    // Add only ONE event listener (for the form submit)
+    form.addEventListener('submit', handleTransactionSubmit);
+
+    // Remove the click event from the save button
+    saveButton.onclick = null;
+
+    // Show modal
     modal.classList.add('active');
 }
 
 function handleTransactionSubmit(e) {
     e.preventDefault();
+    console.log('Form submitted'); // Debug log
+    
     const modal = document.getElementById('transactionModal');
     const type = modal.dataset.type;
-    const client = document.getElementById('transactionClient').value;
-    const seller = document.getElementById('transactionSeller').value;
-    const paymentMethod = document.getElementById('transactionPayment').value;
-    const installments = document.getElementById('transactionInstallments').value;
+    
+    // Só pega os valores dos campos se for uma saída
+    const client = type === 'exit' ? document.getElementById('transactionClient').value : '';
+    const seller = type === 'exit' ? document.getElementById('transactionSeller').value : '';
+    const paymentMethod = type === 'exit' ? document.getElementById('transactionPayment').value : '';
+    const installments = type === 'exit' ? document.getElementById('transactionInstallments').value : '1';
 
     if (currentTransactionProducts.length === 0) {
         alert('Adicione pelo menos um produto à transação!');
         return;
     }
 
+    // Validação adicional apenas para saídas
+    if (type === 'exit') {
+        if (!client || !seller || !paymentMethod) {
+            alert('Por favor, preencha todos os campos obrigatórios!');
+            return;
+        }
+    }
+
     // Calculate total
     const total = currentTransactionProducts.reduce((sum, item) => sum + item.total, 0);
+    console.log('Transaction total:', total); // Debug log
 
-    // Update inventory for each product
-    currentTransactionProducts.forEach(item => {
-        const productIndex = inventoryItems.findIndex(invItem => invItem.code === item.code);
-        if (type === 'entry') {
-            inventoryItems[productIndex].quantity += item.quantity;
-        } else {
-            inventoryItems[productIndex].quantity -= item.quantity;
-        }
-    });
+    try {
+        // Update inventory only for stock products
+        currentTransactionProducts.forEach(item => {
+            if (item.type === 'stock') { // Apenas produtos do estoque
+                const productIndex = inventoryItems.findIndex(invItem => invItem.code === item.code);
+                if (productIndex === -1) {
+                    throw new Error(`Produto ${item.name} não encontrado no estoque!`);
+                }
+                
+                if (type === 'entry') {
+                    inventoryItems[productIndex].quantity += item.quantity;
+                } else {
+                    if (item.quantity > inventoryItems[productIndex].quantity) {
+                        throw new Error(`Quantidade insuficiente em estoque para o produto ${item.name}!`);
+                    }
+                    inventoryItems[productIndex].quantity -= item.quantity;
+                }
+            }
+        });
 
-    // Create transaction record
-    const transaction = {
-        date: new Date().toISOString(),
-        type,
-        products: currentTransactionProducts,
-        total,
-        client: type === 'exit' ? client : '',
-        seller: type === 'exit' ? seller : '',
-        paymentMethod: type === 'exit' ? paymentMethod : '',
-        installments: type === 'exit' && paymentMethod === 'credito' ? parseInt(installments) : 1
-    };
+        // Create transaction record
+        const transaction = {
+            date: new Date().toISOString(),
+            type,
+            products: currentTransactionProducts,
+            total,
+            client: type === 'exit' ? client : '',
+            seller: type === 'exit' ? seller : '',
+            paymentMethod: type === 'exit' ? paymentMethod : '',
+            installments: type === 'exit' && paymentMethod === 'credito' ? parseInt(installments) : 1
+        };
+        console.log('New transaction:', transaction); // Debug log
 
-    transactions.push(transaction);
-    saveToLocalStorage();
-    renderInventoryTable();
-    renderTransactionsTable();
-    updateDashboardStats();
-    closeModal('transactionModal');
+        transactions.push(transaction);
+        saveToLocalStorage();
+        renderInventoryTable();
+        renderTransactionsTable();
+        updateDashboardStats();
+        closeModal('transactionModal');
+        
+        // Após sucesso, limpe os produtos e feche o modal
+        currentTransactionProducts = [];
+        
+        alert(type === 'entry' ? 'Entrada de produtos registrada com sucesso!' : 'Saída de produtos registrada com sucesso!');
+    } catch (error) {
+        alert(error.message);
+        console.error('Error in transaction:', error); // Debug log
+    }
 }
 
 // Render Transactions Table
@@ -415,14 +528,16 @@ function deleteTransaction(index) {
     if (confirm('Tem certeza que deseja excluir esta transação?')) {
         const transaction = transactions[index];
         
-        // Reverse inventory changes for each product
+        // Reverse inventory changes only for stock products
         transaction.products.forEach(transactionProduct => {
-            const product = inventoryItems.find(item => item.code === transactionProduct.code);
-            if (product) {
-                if (transaction.type === 'entry') {
-                    product.quantity -= transactionProduct.quantity;
-                } else {
-                    product.quantity += transactionProduct.quantity;
+            if (transactionProduct.type === 'stock') {
+                const product = inventoryItems.find(item => item.code === transactionProduct.code);
+                if (product) {
+                    if (transaction.type === 'entry') {
+                        product.quantity -= transactionProduct.quantity;
+                    } else {
+                        product.quantity += transactionProduct.quantity;
+                    }
                 }
             }
         });
@@ -448,21 +563,20 @@ function updateDashboardStats() {
     });
 
     // Calculate totals
-    const revenue = currentMonthTransactions
+    const gains = currentMonthTransactions
         .filter(t => t.type === 'exit')
         .reduce((sum, t) => sum + t.total, 0);
 
-    const costs = currentMonthTransactions
+    const expenses = currentMonthTransactions
         .filter(t => t.type === 'entry')
         .reduce((sum, t) => sum + t.total, 0);
 
-    const operationalCosts = costs + (revenue * 0.3); // Adding 30% of revenue as operational costs
-    const netProfit = revenue - operationalCosts;
-    const profitMargin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
+    const netProfit = gains - expenses;
+    const profitMargin = gains > 0 ? (netProfit / gains) * 100 : 0;
 
     // Update dashboard values
-    document.getElementById('totalRevenue').textContent = `R$ ${revenue.toFixed(2)}`;
-    document.getElementById('operationalCosts').textContent = `R$ ${operationalCosts.toFixed(2)}`;
+    document.getElementById('totalRevenue').textContent = `R$ ${gains.toFixed(2)}`;
+    document.getElementById('operationalCosts').textContent = `R$ ${expenses.toFixed(2)}`;
     document.getElementById('netProfit').textContent = `R$ ${netProfit.toFixed(2)}`;
     document.getElementById('profitMargin').textContent = `${profitMargin.toFixed(2)}%`;
 
@@ -474,8 +588,8 @@ function updateCharts() {
     const monthlyData = getMonthlyData();
     
     // Update Revenue Chart
-    revenueChart.data.datasets[0].data = monthlyData.revenues;
-    revenueChart.data.datasets[1].data = monthlyData.costs;
+    revenueChart.data.datasets[0].data = monthlyData.gains;
+    revenueChart.data.datasets[1].data = monthlyData.expenses;
     revenueChart.update();
 
     // Update Profit Chart
@@ -486,8 +600,8 @@ function updateCharts() {
 function getMonthlyData() {
     const months = getLastTwelveMonths();
     const data = {
-        revenues: new Array(12).fill(0),
-        costs: new Array(12).fill(0),
+        gains: new Array(12).fill(0),
+        expenses: new Array(12).fill(0),
         profits: new Array(12).fill(0)
     };
 
@@ -497,15 +611,15 @@ function getMonthlyData() {
         
         if (monthIndex !== -1) {
             if (t.type === 'exit') {
-                data.revenues[monthIndex] += t.total;
+                data.gains[monthIndex] += t.total;
             } else {
-                data.costs[monthIndex] += t.total;
+                data.expenses[monthIndex] += t.total;
             }
         }
     });
 
     // Calculate profits
-    data.profits = data.revenues.map((rev, i) => rev - data.costs[i]);
+    data.profits = data.gains.map((gain, i) => gain - data.expenses[i]);
 
     return data;
 }
@@ -528,15 +642,15 @@ function initializeCharts() {
             labels: months,
             datasets: [
                 {
-                    label: 'Receitas',
-                    data: monthlyData.revenues,
+                    label: 'Ganhos',
+                    data: monthlyData.gains,
                     backgroundColor: 'rgba(0, 255, 157, 0.2)',
                     borderColor: 'rgba(0, 255, 157, 1)',
                     borderWidth: 1
                 },
                 {
-                    label: 'Despesas',
-                    data: monthlyData.costs,
+                    label: 'Gastos',
+                    data: monthlyData.expenses,
                     backgroundColor: 'rgba(255, 99, 132, 0.2)',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     borderWidth: 1
@@ -747,24 +861,64 @@ function openQuoteModal() {
 
 function addProductToQuote() {
     const modal = document.getElementById('addOrderProductModal');
-    const select = document.getElementById('orderProductSelect');
     
-    // Limpa e preenche o select com produtos disponíveis
+    // Reset forms
+    document.getElementById('addStockProductForm').reset();
+    document.getElementById('addOtherProductForm').reset();
+    
+    // Setup product type selector
+    const typeButtons = modal.querySelectorAll('.product-type-btn');
+    typeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            typeButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            
+            document.querySelectorAll('.product-form').forEach(form => form.classList.remove('active'));
+            document.getElementById(`add${button.dataset.type === 'stock' ? 'Stock' : 'Other'}ProductForm`).classList.add('active');
+        });
+    });
+
+    // Populate stock products select
+    const select = document.getElementById('orderProductSelect');
     select.innerHTML = '<option value="">Selecione um produto</option>';
     inventoryItems.forEach(item => {
         const option = document.createElement('option');
         option.value = item.code;
-        option.textContent = `${item.name} (R$ ${item.price.toFixed(2)})`;
+        option.textContent = `${item.name} (${item.quantity} disponíveis)`;
+        option.dataset.price = item.price;
         select.appendChild(option);
     });
-    
+
+    // Set default price when product is selected
+    select.onchange = function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const defaultPrice = selectedOption.dataset.price || '';
+        document.getElementById('orderProductPrice').value = defaultPrice;
+    };
+
+    // Setup form submission
+    const submitButton = document.getElementById('addOrderProductSubmit');
+    submitButton.onclick = handleAddProductToQuote;
+
     modal.classList.add('active');
 }
 
 function handleAddProductToQuote(e) {
     e.preventDefault();
+    const isStockProduct = document.querySelector('.product-type-btn.active').dataset.type === 'stock';
+    
+    if (isStockProduct) {
+        handleAddStockProductToQuote();
+    } else {
+        handleAddOtherProductToQuote();
+    }
+}
+
+function handleAddStockProductToQuote() {
     const productCode = document.getElementById('orderProductSelect').value;
     const quantity = parseInt(document.getElementById('orderProductQuantity').value);
+    const price = parseFloat(document.getElementById('orderProductPrice').value);
+    const discount = parseFloat(document.getElementById('orderProductDiscount').value) || 0;
     
     const product = inventoryItems.find(item => item.code === productCode);
     if (!product) {
@@ -776,20 +930,77 @@ function handleAddProductToQuote(e) {
         alert('Quantidade deve ser maior que zero');
         return;
     }
+
+    if (price <= 0) {
+        alert('Preço deve ser maior que zero');
+        return;
+    }
+
+    if (discount < 0) {
+        alert('Desconto não pode ser negativo');
+        return;
+    }
     
-    // Adiciona produto à lista
+    // Add product to quote
     quoteProducts.push({
-        ...product,
+        code: product.code,
+        name: product.name,
         quantity: quantity,
-        total: product.price * quantity
+        price: price,
+        discount: discount,
+        total: (price * quantity) - discount,
+        type: 'stock'
     });
     
-    // Atualiza a tabela
+    // Update the table
     updateQuoteProductsTable();
     
-    // Fecha o modal de adicionar produto
+    // Close the modal and reset form
     closeModal('addOrderProductModal');
-    document.getElementById('addOrderProductForm').reset();
+}
+
+function handleAddOtherProductToQuote() {
+    const name = document.getElementById('otherProductName').value.trim();
+    const quantity = parseInt(document.getElementById('otherProductQuantity').value);
+    const price = parseFloat(document.getElementById('otherProductPrice').value);
+    const discount = parseFloat(document.getElementById('otherProductDiscount').value) || 0;
+    
+    if (!name) {
+        alert('Por favor, informe o nome do produto');
+        return;
+    }
+    
+    if (quantity <= 0) {
+        alert('Quantidade deve ser maior que zero');
+        return;
+    }
+
+    if (price <= 0) {
+        alert('Preço deve ser maior que zero');
+        return;
+    }
+
+    if (discount < 0) {
+        alert('Desconto não pode ser negativo');
+        return;
+    }
+    
+    // Add product to quote
+    quoteProducts.push({
+        code: 'OUTRO-' + Date.now(),
+        name: name,
+        quantity: quantity,
+        price: price,
+        discount: discount,
+        total: (price * quantity) - discount,
+        type: 'other'
+    });
+    
+    // Update the table
+    updateQuoteProductsTable();
+    
+    // Close the modal and reset form
+    closeModal('addOrderProductModal');
 }
 
 function updateQuoteProductsTable() {
@@ -802,6 +1013,7 @@ function updateQuoteProductsTable() {
             <td>${item.name}</td>
             <td>${item.quantity}</td>
             <td>R$ ${item.price.toFixed(2)}</td>
+            <td>R$ ${item.discount.toFixed(2)}</td>
             <td>R$ ${item.total.toFixed(2)}</td>
             <td>
                 <button type="button" onclick="removeQuoteProduct(${index})" class="secondary-btn">
@@ -980,32 +1192,31 @@ function generateFinancialReport() {
             return tDate.getMonth() === date.getMonth() && tDate.getFullYear() === date.getFullYear();
         });
 
-        const revenue = monthTransactions
+        const gains = monthTransactions
             .filter(t => t.type === 'exit')
             .reduce((sum, t) => sum + t.total, 0);
 
-        const costs = monthTransactions
+        const expenses = monthTransactions
             .filter(t => t.type === 'entry')
             .reduce((sum, t) => sum + t.total, 0);
 
-        const operationalCosts = costs + (revenue * 0.3);
-        const profit = revenue - operationalCosts;
-        const margin = revenue > 0 ? (profit / revenue) * 100 : 0;
+        const netProfit = gains - expenses;
+        const margin = gains > 0 ? (netProfit / gains) * 100 : 0;
 
         monthlyData.push({
             date,
-            revenue,
-            costs: operationalCosts,
-            profit,
+            gains,
+            expenses,
+            netProfit,
             margin
         });
     }
 
     generateReport('Relatório Financeiro', monthlyData, [
         { header: 'Período', key: 'date', format: d => `${getMonthName(d.getMonth())}/${d.getFullYear()}` },
-        { header: 'Receita', key: 'revenue', format: v => `R$ ${v.toFixed(2)}` },
-        { header: 'Custos', key: 'costs', format: v => `R$ ${v.toFixed(2)}` },
-        { header: 'Lucro', key: 'profit', format: v => `R$ ${v.toFixed(2)}` },
+        { header: 'Ganhos', key: 'gains', format: v => `R$ ${v.toFixed(2)}` },
+        { header: 'Gastos', key: 'expenses', format: v => `R$ ${v.toFixed(2)}` },
+        { header: 'Lucro', key: 'netProfit', format: v => `R$ ${v.toFixed(2)}` },
         { header: 'Margem', key: 'margin', format: v => `${v.toFixed(2)}%` }
     ]);
 }
@@ -1108,9 +1319,8 @@ function exportReport() {
         .filter(t => t.type === 'entry')
         .reduce((sum, t) => sum + t.total, 0);
     
-    const monthlyOperationalCosts = monthlyCosts + (monthlyRevenue * 0.3);
-    const monthlyProfit = monthlyRevenue - monthlyOperationalCosts;
-    const monthlyMargin = monthlyRevenue > 0 ? (monthlyProfit / monthlyRevenue) * 100 : 0;
+    const monthlyNetProfit = monthlyRevenue - monthlyCosts;
+    const monthlyMargin = monthlyRevenue > 0 ? (monthlyNetProfit / monthlyRevenue) * 100 : 0;
 
     // Criar o relatório HTML
     const printWindow = window.open('', '', 'width=800,height=600');
@@ -1234,16 +1444,16 @@ function exportReport() {
                     <h2>Resumo do Mês Atual</h2>
                     <div class="stats-grid">
                         <div class="stat-card">
-                            <h3>Faturamento</h3>
+                            <h3>Ganhos</h3>
                             <div class="value">R$ ${monthlyRevenue.toFixed(2)}</div>
                         </div>
                         <div class="stat-card">
-                            <h3>Custos Operacionais</h3>
-                            <div class="value">R$ ${monthlyOperationalCosts.toFixed(2)}</div>
+                            <h3>Gastos</h3>
+                            <div class="value">R$ ${monthlyCosts.toFixed(2)}</div>
                         </div>
                         <div class="stat-card">
                             <h3>Lucro Líquido</h3>
-                            <div class="value">R$ ${monthlyProfit.toFixed(2)}</div>
+                            <div class="value">R$ ${monthlyNetProfit.toFixed(2)}</div>
                         </div>
                         <div class="stat-card">
                             <h3>Margem de Lucro</h3>
@@ -1491,29 +1701,25 @@ function generateOrderPDF(index) {
     // Update table position with multiple products
     doc.autoTable({
         startY: 82,
-        head: [['Produto', 'Quantidade', 'Valor Unit.', 'Total']],
+        head: [['Produto', 'Quantidade', 'Valor Unit.', 'Desconto', 'Total']],
         body: transaction.products.map(product => [
             product.name,
             product.quantity.toString(),
             `R$ ${product.price.toFixed(2)}`,
-            `R$ ${product.total.toFixed(2)}`
+            product.discount > 0 ? `R$ ${product.discount.toFixed(2)}` : '-',
+            `R$ ${(product.quantity * product.price - product.discount).toFixed(2)}`
         ]),
-        theme: 'grid',
-        headStyles: {
-            fillColor: [0, 51, 102],
-            textColor: 255,
-            fontSize: 10
-        },
-        bodyStyles: {
-            fontSize: 10
-        },
-        margin: { left: 20, right: 20 }
+        theme: 'striped',
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [41, 128, 185] }
     });
 
     // Add total with installment information
     const finalY = doc.previousAutoTable.finalY + 10;
+    const totalAmount = transaction.products.reduce((sum, p) => sum + (p.quantity * p.price - p.discount), 0);
+    
     doc.setFontSize(12);
-    doc.text(`Valor Total: R$ ${transaction.total.toFixed(2)}`, 150, finalY, { align: 'right' });
+    doc.text(`Valor Total: R$ ${totalAmount.toFixed(2)}`, 150, finalY, { align: 'right' });
     if (transaction.paymentMethod === 'credito' && transaction.installments > 1) {
         const monthlyAmount = transaction.total / transaction.installments;
         doc.setFontSize(10);
@@ -1622,28 +1828,63 @@ function updateWelcomeName(name) {
 // Add these new functions for handling multiple products
 function showAddTransactionProductModal() {
     const modal = document.getElementById('addTransactionProductModal');
-    const select = document.getElementById('transactionProductSelect');
     
-    // Clear and populate the select with available products
+    // Reset forms
+    document.getElementById('addStockProductForm').reset();
+    document.getElementById('addOtherProductForm').reset();
+    
+    // Setup product type selector
+    const typeButtons = modal.querySelectorAll('.product-type-btn');
+    typeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            typeButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+            
+            document.querySelectorAll('.product-form').forEach(form => form.classList.remove('active'));
+            document.getElementById(`add${button.dataset.type === 'stock' ? 'Stock' : 'Other'}ProductForm`).classList.add('active');
+        });
+    });
+
+    // Populate stock products select
+    const select = document.getElementById('transactionProductSelect');
     select.innerHTML = '<option value="">Selecione um produto</option>';
     inventoryItems.forEach(item => {
         const option = document.createElement('option');
         option.value = item.code;
         option.textContent = `${item.name} (${item.quantity} disponíveis)`;
+        option.dataset.price = item.price;
         select.appendChild(option);
     });
-    
+
+    // Set default price when product is selected
+    select.onchange = function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const defaultPrice = selectedOption.dataset.price || '';
+        document.getElementById('transactionProductPrice').value = defaultPrice;
+    };
+
     // Setup form submission
-    const form = document.getElementById('addTransactionProductForm');
-    form.onsubmit = handleAddTransactionProduct;
-    
+    const submitButton = document.getElementById('addProductSubmit');
+    submitButton.onclick = handleAddProduct;
+
     modal.classList.add('active');
 }
 
-function handleAddTransactionProduct(e) {
-    e.preventDefault();
+function handleAddProduct() {
+    const isStockProduct = document.querySelector('.product-type-btn.active').dataset.type === 'stock';
+    
+    if (isStockProduct) {
+        handleAddStockProduct();
+    } else {
+        handleAddOtherProduct();
+    }
+}
+
+function handleAddStockProduct() {
     const productCode = document.getElementById('transactionProductSelect').value;
     const quantity = parseInt(document.getElementById('transactionProductQuantity').value);
+    const price = parseFloat(document.getElementById('transactionProductPrice').value);
+    const discount = parseFloat(document.getElementById('transactionProductDiscount').value) || 0;
     
     const product = inventoryItems.find(item => item.code === productCode);
     if (!product) {
@@ -1653,6 +1894,16 @@ function handleAddTransactionProduct(e) {
     
     if (quantity <= 0) {
         alert('Quantidade deve ser maior que zero');
+        return;
+    }
+
+    if (price <= 0) {
+        alert('Preço deve ser maior que zero');
+        return;
+    }
+
+    if (discount < 0) {
+        alert('Desconto não pode ser negativo');
         return;
     }
 
@@ -1667,8 +1918,10 @@ function handleAddTransactionProduct(e) {
         code: product.code,
         name: product.name,
         quantity: quantity,
-        price: product.price,
-        total: product.price * quantity
+        price: price,
+        discount: discount,
+        total: (price * quantity) - discount,
+        type: 'stock'
     });
     
     // Update the table
@@ -1676,7 +1929,50 @@ function handleAddTransactionProduct(e) {
     
     // Close the modal and reset form
     closeModal('addTransactionProductModal');
-    document.getElementById('addTransactionProductForm').reset();
+}
+
+function handleAddOtherProduct() {
+    const name = document.getElementById('otherProductName').value.trim();
+    const quantity = parseInt(document.getElementById('otherProductQuantity').value);
+    const price = parseFloat(document.getElementById('otherProductPrice').value);
+    const discount = parseFloat(document.getElementById('otherProductDiscount').value) || 0;
+    
+    if (!name) {
+        alert('Por favor, informe o nome do produto');
+        return;
+    }
+    
+    if (quantity <= 0) {
+        alert('Quantidade deve ser maior que zero');
+        return;
+    }
+
+    if (price <= 0) {
+        alert('Preço deve ser maior que zero');
+        return;
+    }
+
+    if (discount < 0) {
+        alert('Desconto não pode ser negativo');
+        return;
+    }
+    
+    // Add product to current transaction
+    currentTransactionProducts.push({
+        code: 'OUTRO-' + Date.now(),
+        name: name,
+        quantity: quantity,
+        price: price,
+        discount: discount,
+        total: (price * quantity) - discount,
+        type: 'other'
+    });
+    
+    // Update the table
+    updateTransactionProductsTable();
+    
+    // Close the modal and reset form
+    closeModal('addTransactionProductModal');
 }
 
 function updateTransactionProductsTable() {
@@ -1692,6 +1988,7 @@ function updateTransactionProductsTable() {
             <td>${item.name}</td>
             <td>${item.quantity}</td>
             <td>R$ ${item.price.toFixed(2)}</td>
+            <td>R$ ${item.discount.toFixed(2)}</td>
             <td>R$ ${item.total.toFixed(2)}</td>
             <td>
                 <button type="button" onclick="removeTransactionProduct(${index})" class="secondary-btn">
@@ -1708,4 +2005,127 @@ function updateTransactionProductsTable() {
 function removeTransactionProduct(index) {
     currentTransactionProducts.splice(index, 1);
     updateTransactionProductsTable();
+}
+
+function filterInventory() {
+    const searchTerm = document.getElementById('inventorySearch').value.toLowerCase();
+    const filteredItems = inventoryItems.filter(item => 
+        item.code.toLowerCase().includes(searchTerm) || 
+        item.name.toLowerCase().includes(searchTerm)
+    );
+    
+    const tbody = inventoryTable.querySelector('tbody');
+    tbody.innerHTML = '';
+    
+    if (filteredItems.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td colspan="6" class="no-results">Nenhum produto encontrado com os filtros escolhidos.</td>
+        `;
+        tbody.appendChild(row);
+    } else {
+        filteredItems.forEach((item, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.code}</td>
+                <td>${item.name}</td>
+                <td>${item.quantity}</td>
+                <td>R$ ${item.price.toFixed(2)}</td>
+                <td>R$ ${(item.price * item.quantity).toFixed(2)}</td>
+                <td>
+                    <button onclick="editItem(${index})" class="secondary-btn">
+                        <i class="material-icons">edit</i>
+                    </button>
+                    <button onclick="deleteItem(${index})" class="secondary-btn">
+                        <i class="material-icons">delete</i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+}
+
+function clearInventorySearch() {
+    document.getElementById('inventorySearch').value = '';
+    renderInventoryTable();
+}
+
+function filterTransactionsByDate() {
+    const searchDate = document.getElementById('transactionDateSearch').value;
+    if (!searchDate) return;
+
+    const filteredTransactions = transactions.filter(transaction => {
+        const transactionDate = new Date(transaction.date).toISOString().split('T')[0];
+        return transactionDate === searchDate;
+    });
+
+    const tbody = transactionsTable.querySelector('tbody');
+    tbody.innerHTML = '';
+    
+    if (filteredTransactions.length === 0) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td colspan="6" class="no-results">Nenhum lançamento foi encontrado com os filtros escolhidos.</td>
+        `;
+        tbody.appendChild(row);
+    } else {
+        filteredTransactions.forEach((transaction, index) => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${new Date(transaction.date).toLocaleDateString()}</td>
+                <td>${transaction.type === 'entry' ? 'Entrada' : 'Saída'}</td>
+                <td>${transaction.products.map(p => p.name).join(', ')}</td>
+                <td>${transaction.products.reduce((sum, p) => sum + p.quantity, 0)}</td>
+                <td>R$ ${transaction.total.toFixed(2)}</td>
+                <td>
+                    ${transaction.type === 'exit' ? `
+                    <button onclick="generateOrderPDF(${index})" class="secondary-btn" title="Gerar Nota Fiscal">
+                        <i class="material-icons">picture_as_pdf</i>
+                    </button>
+                    ` : ''}
+                    <button onclick="deleteTransaction(${index})" class="secondary-btn" title="Excluir">
+                        <i class="material-icons">delete</i>
+                    </button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+}
+
+function clearTransactionSearch() {
+    document.getElementById('transactionDateSearch').value = '';
+    renderTransactionsTable();
+}
+
+// Adicionar esta nova função
+function setupSearchSections() {
+    // Configuração da busca no estoque
+    const inventorySearchContainer = document.createElement('div');
+    inventorySearchContainer.className = 'search-container';
+    inventorySearchContainer.innerHTML = `
+        <input type="text" id="inventorySearch" placeholder="Buscar produtos...">
+        <button onclick="filterInventory()" class="search-btn" title="Buscar">
+            <i class="material-icons">search</i>
+        </button>
+        <button onclick="clearInventorySearch()" class="clear-btn" title="Limpar busca">
+            <i class="material-icons">clear</i>
+        </button>
+    `;
+    inventoryTable.parentNode.insertBefore(inventorySearchContainer, inventoryTable);
+
+    // Configuração da busca nos lançamentos
+    const transactionsSearchContainer = document.createElement('div');
+    transactionsSearchContainer.className = 'search-container';
+    transactionsSearchContainer.innerHTML = `
+        <input type="date" id="transactionDateSearch">
+        <button onclick="filterTransactionsByDate()" class="search-btn" title="Buscar">
+            <i class="material-icons">search</i>
+        </button>
+        <button onclick="clearTransactionSearch()" class="clear-btn" title="Limpar busca">
+            <i class="material-icons">clear</i>
+        </button>
+    `;
+    transactionsTable.parentNode.insertBefore(transactionsSearchContainer, transactionsTable);
 } 
