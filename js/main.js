@@ -31,17 +31,16 @@ document.addEventListener('DOMContentLoaded', () => {
 // Check if email is valid
 async function validateEmail(email) {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    
-    // Primeiro valida o formato do email
+
     if (!emailRegex.test(email)) {
         return false;
     }
 
     try {
-        // Tenta buscar a lista de emails permitidos via Netlify Function
-        const response = await fetch('/.netlify/functions/fetchUsers', {
-            method: 'GET',
-            cache: 'no-cache'
+        const response = await fetch('/.netlify/functions/fetchEmails', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
         });
 
         if (!response.ok) {
@@ -49,14 +48,14 @@ async function validateEmail(email) {
         }
 
         const data = await response.json();
-        return data.allowedEmails.includes(email.trim());
+        return !data.exists; // Se existe no pastebin, retorna como não existente
     } catch (error) {
         console.error('Erro ao validar email:', error);
-        // Em caso de erro de conexão, validar offline
         const offlineEmails = ['hookeybr@gmail.com'];
         return offlineEmails.includes(email.trim());
     }
 }
+
 
 // Atualiza a função showEmailModal para lidar com a validação assíncrona
 function showEmailModal() {
