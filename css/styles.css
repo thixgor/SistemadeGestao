@@ -750,4 +750,197 @@ th {
 .logout-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 8px rgba(255, 0, 0, 0.2);
+}
+
+/* Vault Modal Styles */
+.vault-modal {
+    max-width: 400px !important;
+    background: linear-gradient(145deg, #1a1a1a, #2d3748) !important;
+    border: 2px solid #4a5568 !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+.vault-display {
+    background: #0a0f16;
+    padding: 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+    border: 1px solid #2d3748;
+    text-align: center;
+}
+
+.vault-password {
+    font-family: 'Courier New', monospace;
+    font-size: 32px;
+    color: #00ff9d;
+    letter-spacing: 8px;
+    text-shadow: 0 0 10px rgba(0, 255, 157, 0.5);
+}
+
+.vault-keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    padding: 20px;
+    background: #151b21;
+    border-radius: 8px;
+    margin: 20px 0;
+}
+
+.vault-btn {
+    background: linear-gradient(145deg, #1e2a3b, #2d3748);
+    border: none;
+    color: #ffffff;
+    padding: 20px;
+    font-size: 24px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.vault-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    background: linear-gradient(145deg, #2d3748, #1e2a3b);
+}
+
+.vault-btn:active {
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.vault-clear {
+    background: linear-gradient(145deg, #c53030, #e53e3e);
+    color: white;
+}
+
+.vault-enter {
+    background: linear-gradient(145deg, #2f855a, #38a169);
+    color: white;
+}
+
+.vault-error {
+    color: #e53e3e;
+    text-align: center;
+    margin-top: 10px;
+    font-size: 14px;
+    background: rgba(229, 62, 62, 0.1);
+    padding: 10px;
+    border-radius: 4px;
+    display: none;
+}
+
+.vault-error.active {
+    display: block;
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+.search-container {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding: 8px;
+    background: #1a1a1a;
+    border-radius: 8px;
+    border: 1px solid #2d3748;
+    max-width: 400px;
+}
+
+.search-container input {
+    flex: 1;
+    padding: 6px 12px;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    font-size: 14px;
+    background-color: #2d3748;
+    color: #ffffff;
+    transition: all 0.2s ease;
+    min-width: 150px;
+}
+
+.search-container input:focus {
+    outline: none;
+    border-color: #00a3ff;
+    box-shadow: 0 0 0 2px rgba(0, 163, 255, 0.1);
+}
+
+.search-container button {
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    min-width: 40px;
+}
+
+.search-container button.search-btn {
+    background-color: #00a3ff;
+    color: #ffffff;
+}
+
+.search-container button.search-btn:hover {
+    background-color: #0088cc;
+}
+
+.search-container button.clear-btn {
+    background-color: #4a5568;
+    color: #ffffff;
+}
+
+.search-container button.clear-btn:hover {
+    background-color: #718096;
+}
+
+.search-container button i {
+    font-size: 16px;
+    margin: 0;
+}
+
+.no-results {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    font-style: italic;
+}
+
+.product-type-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.product-type-btn {
+    flex: 1;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.product-type-btn.active {
+    background-color: var(--primary-color);
+    color: var(--background-color);
+    border-color: var(--primary-color);
+}
+
+.product-form {
+    display: none;
+}
+
+.product-form.active {
+    display: block;
 } 
