@@ -25,132 +25,8 @@ const addExitBtn = document.getElementById('addExit');
 
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
-    checkEmail();
+    initializeSystem();
 });
-
-async function validateEmail(email) {
-    // Regex melhorado e validado
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    
-    if (!emailRegex.test(email)) {
-        return { valid: false, message: 'Formato de email inválido' };
-    }
-
-    try {
-        const response = await fetch(`/.netlify/functions/fetchEmails?email=${encodeURIComponent(email)}`);
-        
-        if (!response.ok) {
-            throw new Error('Serviço indisponível');
-        }
-
-        const result = await response.json();
-        return result.valid 
-            ? { valid: true }
-            : { valid: false, message: 'Email não autorizado' };
-
-    } catch (error) {
-        console.error('Erro:', error);
-        const approvedEmails = ['email@valido.com', 'throdrigf@gmail.com'];
-        const isValid = approvedEmails.includes(email.toLowerCase().trim());
-        return {
-            valid: isValid,
-            message: isValid ? '' : 'Validação offline: Email não permitido'
-        };
-    }
-}
-
-// Atualiza a função showEmailModal para lidar com a validação assíncrona
-function showEmailModal() {
-    const modal = document.getElementById('emailModal');
-    if (!modal) {
-        // Se o modal não existe, cria ele dinamicamente
-        const modalHTML = `
-            <div id="emailModal" class="modal license-modal">
-                <div class="modal-content dark-theme">
-                    <h2>ControlXpert 2025</h2>
-                    <div class="license-info">
-                        <p><strong>Sistema de Gestão Empresarial</strong></p>
-                        <p>Para continuar, insira seu email</p>
-                    </div>
-                    <form id="emailForm">
-                        <div class="form-group">
-                            <input type="email" id="emailInput" required placeholder="Digite seu email" 
-                                   pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$" autocomplete="off">
-                        </div>
-                        <div class="form-actions">
-                            <button type="submit" class="save-btn">Acessar Sistema</button>
-                        </div>
-                    </form>
-                    <div class="license-support">
-                        <p>Em caso de problemas com a ativação, entre em contato:</p>
-                        <a href="mailto:throdrigf@gmail.com">throdrigf@gmail.com</a>
-                    </div>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-    }
-
-    const emailModal = document.getElementById('emailModal');
-    const form = document.getElementById('emailForm');
-    const input = document.getElementById('emailInput');
-
-    // Prevent closing by clicking outside
-    emailModal.onclick = (e) => {
-        if (e.target === emailModal) {
-            e.preventDefault();
-            e.stopPropagation();
-            return false;
-        }
-    };
-
-    // Handle form submission
-    form.onsubmit = async (e) => {
-        e.preventDefault();
-        const email = input.value.trim().toLowerCase();
-        
-        // Limpa estados anteriores
-        form.classList.remove('error');
-        const existingError = form.querySelector('.error-message');
-        if (existingError) existingError.remove();
-    
-        // Validação
-        const validation = await validateEmail(email);
-        
-        if (validation.valid) {
-            localStorage.setItem('userEmail', email);
-            emailModal.remove();
-            initializeSystem();
-        } else {
-            form.classList.add('error');
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error-message';
-            errorDiv.innerHTML = `
-                <p>⛔ ${validation.message || 'Erro desconhecido'}</p>
-                <p>Acesso restrito a emails autorizados</p>
-            `;
-            form.appendChild(errorDiv);
-        }
-    };
-
-    emailModal.classList.add('active');
-}
-
-// Atualiza a função checkEmail para lidar com a validação assíncrona
-async function checkEmail() {
-    const email = localStorage.getItem('userEmail');
-    if (!email) {
-        showEmailModal();
-    } else {
-        const isValid = await validateEmail(email);
-        if (!isValid) {
-            localStorage.removeItem('userEmail');
-            showEmailModal();
-        } else {
-            initializeSystem();
-        }
-    }
-}
 
 function initializeSystem() {
     loadDataFromStorage();
@@ -192,8 +68,8 @@ function setupEventListeners() {
     // Logout button
     document.getElementById('logoutBtn').addEventListener('click', () => {
         if (confirm('Tem certeza que deseja sair do sistema?')) {
-            localStorage.removeItem('userEmail');
-            window.location.reload(); // Recarrega a página para forçar a verificação do email
+            localStorage.clear();
+            window.location.reload();
         }
     });
 
