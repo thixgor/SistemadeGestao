@@ -32,27 +32,30 @@ document.addEventListener('DOMContentLoaded', () => {
 async function validateEmail(email) {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
+    // Validação básica do formato
     if (!emailRegex.test(email)) {
         return false;
     }
 
     try {
-        const response = await fetch('/.netlify/functions/fetchEmails', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-        });
-
+        // Faz a requisição via GET com o email como query parameter
+        const response = await fetch(`/.netlify/functions/fetchEmails?email=${encodeURIComponent(email)}`);
+        
         if (!response.ok) {
-            throw new Error('Erro ao validar email');
+            throw new Error('Falha na validação do email');
         }
 
         const data = await response.json();
-        return !data.exists; // Se existe no pastebin, retorna como não existente
+        
+        // Retorna true APENAS se o email NÃO existir na lista
+        // (modifique para !data.exists se quiser o comportamento inverso)
+        return !data.exists;
+
     } catch (error) {
-        console.error('Erro ao validar email:', error);
-        const offlineEmails = ['hookeybr@gmail.com'];
-        return offlineEmails.includes(email.trim());
+        console.error('Erro na validação:', error);
+        // Fallback para modo offline
+        const localEmails = ['email@backup.com']; // Adicione emails válidos locais
+        return localEmails.includes(email.trim().toLowerCase());
     }
 }
 
