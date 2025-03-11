@@ -28,37 +28,36 @@ document.addEventListener('DOMContentLoaded', () => {
     checkEmail();
 });
 
-// Check if email is valid
 async function validateEmail(email) {
+    // Regex melhorado e validado
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-
-    // Validação básica do formato
+    
     if (!emailRegex.test(email)) {
-        return false;
+        return { valid: false, message: 'Formato de email inválido' };
     }
 
     try {
-        // Faz a requisição via GET com o email como query parameter
         const response = await fetch(`/.netlify/functions/fetchEmails?email=${encodeURIComponent(email)}`);
         
         if (!response.ok) {
-            throw new Error('Falha na validação do email');
+            throw new Error('Serviço indisponível');
         }
 
-        const data = await response.json();
-        
-        // Retorna true APENAS se o email NÃO existir na lista
-        // (modifique para !data.exists se quiser o comportamento inverso)
-        return !data.exists;
+        const result = await response.json();
+        return result.valid 
+            ? { valid: true }
+            : { valid: false, message: 'Email não autorizado' };
 
     } catch (error) {
-        console.error('Erro na validação:', error);
-        // Fallback para modo offline
-        const localEmails = ['email@backup.com']; // Adicione emails válidos locais
-        return localEmails.includes(email.trim().toLowerCase());
+        console.error('Erro:', error);
+        const approvedEmails = ['email@valido.com', 'throdrigf@gmail.com'];
+        const isValid = approvedEmails.includes(email.toLowerCase().trim());
+        return {
+            valid: isValid,
+            message: isValid ? '' : 'Validação offline: Email não permitido'
+        };
     }
 }
-
 
 // Atualiza a função showEmailModal para lidar com a validação assíncrona
 function showEmailModal() {
@@ -110,25 +109,26 @@ function showEmailModal() {
         e.preventDefault();
         const email = input.value.trim().toLowerCase();
         
-        // Remove any existing error message
-        const existingError = document.querySelector('.email-error');
-        if (existingError) {
-            existingError.remove();
-        }
-
-        try {
-            const isValid = await validateEmail(email);
-            if (isValid) {
-                localStorage.setItem('userEmail', email);
-                emailModal.classList.remove('active');
-                initializeSystem();
-            } else {
-                throw new Error('Email não autorizado. Por favor, entre em contato com o suporte.');
-            }
-        } catch (error) {
+        // Limpa estados anteriores
+        form.classList.remove('error');
+        const existingError = form.querySelector('.error-message');
+        if (existingError) existingError.remove();
+    
+        // Validação
+        const validation = await validateEmail(email);
+        
+        if (validation.valid) {
+            localStorage.setItem('userEmail', email);
+            emailModal.remove();
+            initializeSystem();
+        } else {
+            form.classList.add('error');
             const errorDiv = document.createElement('div');
-            errorDiv.className = 'email-error';
-            errorDiv.textContent = error.message;
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `
+                <p>⛔ ${validation.message || 'Erro desconhecido'}</p>
+                <p>Acesso restrito a emails autorizados</p>
+            `;
             form.appendChild(errorDiv);
         }
     };
