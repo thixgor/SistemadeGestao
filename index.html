@@ -14,7 +14,7 @@
 <body>
     <div class="sidebar">
         <div class="logo">
-            <span>Controle</span>
+            <span>ControlXpert</span>
         </div>
         <nav>
             <ul>
@@ -74,19 +74,19 @@
         <section id="dashboard-section" class="content-section active">
             <div class="dashboard-grid">
                 <div class="card">
-                    <h3>Faturamento</h3>
+                    <h3>Ganhos</h3>
                     <div class="value" id="totalRevenue">R$ 0,00</div>
                 </div>
                 <div class="card">
-                    <h3>Despesas Operacionais</h3>
+                    <h3>Gastos</h3>
                     <div class="value" id="operationalCosts">R$ 0,00</div>
                 </div>
                 <div class="card">
-                    <h3>Lucro Líquido</h3>
+                    <h3>Balanço</h3>
                     <div class="value" id="netProfit">R$ 0,00</div>
                 </div>
                 <div class="card">
-                    <h3>Margem L. Líquida</h3>
+                    <h3>Margem</h3>
                     <div class="value" id="profitMargin">0,00%</div>
                 </div>
             </div>
@@ -243,7 +243,7 @@
                 </div>
                 <div class="form-group" id="paymentMethodField">
                     <label for="transactionPayment">Método de Pagamento</label>
-                    <select id="transactionPayment" required>
+                    <select id="transactionPayment">
                         <option value="">Selecione o método de pagamento</option>
                         <option value="dinheiro">Dinheiro</option>
                         <option value="pix">PIX</option>
@@ -281,6 +281,7 @@
                                     <th>Produto</th>
                                     <th>Quantidade</th>
                                     <th>Preço</th>
+                                    <th>Desconto</th>
                                     <th>Total</th>
                                     <th>Ações</th>
                                 </tr>
@@ -290,7 +291,7 @@
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <td colspan="3" style="text-align: right;"><strong>Total Geral:</strong></td>
+                                    <td colspan="4" style="text-align: right;"><strong>Total Geral:</strong></td>
                                     <td id="transactionTotalAmount"><strong>R$ 0,00</strong></td>
                                     <td></td>
                                 </tr>
@@ -315,7 +316,13 @@
     <div id="addTransactionProductModal" class="modal">
         <div class="modal-content">
             <h2>Adicionar Produto</h2>
-            <form id="addTransactionProductForm">
+            <div class="product-type-selector">
+                <button type="button" class="product-type-btn active" data-type="stock">Produtos Estoque</button>
+                <button type="button" class="product-type-btn" data-type="other">Outros Produtos</button>
+            </div>
+            
+            <!-- Formulário para Produtos Estoque -->
+            <form id="addStockProductForm" class="product-form active">
                 <div class="form-group">
                     <label for="transactionProductSelect">Produto</label>
                     <select id="transactionProductSelect" required>
@@ -326,11 +333,40 @@
                     <label for="transactionProductQuantity">Quantidade</label>
                     <input type="number" id="transactionProductQuantity" required min="1">
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="cancel-btn" onclick="closeModal('addTransactionProductModal')">Cancelar</button>
-                    <button type="submit" class="save-btn">Adicionar</button>
+                <div class="form-group">
+                    <label for="transactionProductPrice">Preço Unitário</label>
+                    <input type="number" step="0.01" id="transactionProductPrice" required>
+                </div>
+                <div class="form-group" id="discountField">
+                    <label for="transactionProductDiscount">Desconto Fixo (R$)</label>
+                    <input type="number" step="0.01" id="transactionProductDiscount" value="0">
                 </div>
             </form>
+
+            <!-- Formulário para Outros Produtos -->
+            <form id="addOtherProductForm" class="product-form">
+                <div class="form-group">
+                    <label for="otherProductName">Nome do Produto</label>
+                    <input type="text" id="otherProductName" required>
+                </div>
+                <div class="form-group">
+                    <label for="otherProductQuantity">Quantidade</label>
+                    <input type="number" id="otherProductQuantity" required min="1">
+                </div>
+                <div class="form-group">
+                    <label for="otherProductPrice">Preço Unitário</label>
+                    <input type="number" step="0.01" id="otherProductPrice" required>
+                </div>
+                <div class="form-group">
+                    <label for="otherProductDiscount">Desconto Fixo (R$)</label>
+                    <input type="number" step="0.01" id="otherProductDiscount" value="0">
+                </div>
+            </form>
+
+            <div class="form-actions">
+                <button type="button" class="cancel-btn" onclick="closeModal('addTransactionProductModal')">Cancelar</button>
+                <button type="button" class="save-btn" id="addProductSubmit">Adicionar</button>
+            </div>
         </div>
     </div>
 
@@ -381,24 +417,58 @@
     <!-- Modal para adicionar produto ao orçamento/pedido -->
     <div id="addOrderProductModal" class="modal">
         <div class="modal-content">
-            <h2>Adicionar Produto</h2>
-            <form id="addOrderProductForm">
+            <h2>Adicionar Produto ao Orçamento</h2>
+            <div class="product-type-selector">
+                <button class="product-type-btn active" data-type="stock">Produtos do Estoque</button>
+                <button class="product-type-btn" data-type="other">Outros Produtos</button>
+            </div>
+            
+            <!-- Formulário para produtos do estoque -->
+            <form id="addStockProductForm" class="product-form active">
                 <div class="form-group">
                     <label for="orderProductSelect">Produto</label>
                     <select id="orderProductSelect" required>
                         <option value="">Selecione um produto</option>
-                        <!-- Opções serão preenchidas via JavaScript -->
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="orderProductQuantity">Quantidade</label>
-                    <input type="number" id="orderProductQuantity" required min="1">
+                    <input type="number" id="orderProductQuantity" min="1" required>
                 </div>
-                <div class="form-actions">
-                    <button type="button" class="cancel-btn" onclick="closeModal('addOrderProductModal')">Cancelar</button>
-                    <button type="submit" class="save-btn">Adicionar</button>
+                <div class="form-group">
+                    <label for="orderProductPrice">Preço Unitário</label>
+                    <input type="number" id="orderProductPrice" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="orderProductDiscount">Desconto</label>
+                    <input type="number" id="orderProductDiscount" step="0.01" min="0">
                 </div>
             </form>
+            
+            <!-- Formulário para outros produtos -->
+            <form id="addOtherProductForm" class="product-form">
+                <div class="form-group">
+                    <label for="otherProductName">Nome do Produto</label>
+                    <input type="text" id="otherProductName" required>
+                </div>
+                <div class="form-group">
+                    <label for="otherProductQuantity">Quantidade</label>
+                    <input type="number" id="otherProductQuantity" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label for="otherProductPrice">Preço Unitário</label>
+                    <input type="number" id="otherProductPrice" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="otherProductDiscount">Desconto</label>
+                    <input type="number" id="otherProductDiscount" step="0.01" min="0">
+                </div>
+            </form>
+            
+            <div class="form-actions">
+                <button type="button" class="secondary-btn" onclick="closeModal('addOrderProductModal')">Cancelar</button>
+                <button type="button" id="addOrderProductSubmit" class="save-btn">Adicionar</button>
+            </div>
         </div>
     </div>
 
@@ -429,6 +499,36 @@
             </div>
             <div class="form-actions">
                 <button type="button" class="save-btn" onclick="closeModal('creatorModal')">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Cofre para Reset -->
+    <div id="resetVaultModal" class="modal">
+        <div class="modal-content vault-modal">
+            <h2>Reset do Sistema</h2>
+            <div class="vault-display">
+                <div class="vault-password" id="vaultPassword">****</div>
+            </div>
+            <p style="text-align: center; color: #A0AEC0; font-size: 14px; margin-top: -10px; margin-bottom: 20px;">
+                A senha de confirmação é <strong>0000</strong>
+            </p>
+            <div class="vault-keypad">
+                <button type="button" class="vault-btn" data-number="1">1</button>
+                <button type="button" class="vault-btn" data-number="2">2</button>
+                <button type="button" class="vault-btn" data-number="3">3</button>
+                <button type="button" class="vault-btn" data-number="4">4</button>
+                <button type="button" class="vault-btn" data-number="5">5</button>
+                <button type="button" class="vault-btn" data-number="6">6</button>
+                <button type="button" class="vault-btn" data-number="7">7</button>
+                <button type="button" class="vault-btn" data-number="8">8</button>
+                <button type="button" class="vault-btn" data-number="9">9</button>
+                <button type="button" class="vault-btn vault-clear">C</button>
+                <button type="button" class="vault-btn" data-number="0">0</button>
+                <button type="button" class="vault-btn vault-enter">↵</button>
+            </div>
+            <div class="form-actions">
+                <button type="button" class="cancel-btn" onclick="closeModal('resetVaultModal')">Cancelar</button>
             </div>
         </div>
     </div>
