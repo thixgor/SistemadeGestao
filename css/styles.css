@@ -943,4 +943,41 @@ th {
 
 .product-form.active {
     display: block;
+}
+
+/* Product Size Styling */
+.product-size {
+    display: inline-block;
+    background-color: rgba(0, 255, 157, 0.1);
+    color: var(--primary-color);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    margin-left: 6px;
+    font-weight: 500;
+}
+
+.product-size.missing-size {
+    background-color: rgba(245, 101, 101, 0.1);
+    color: var(--danger-color);
+}
+
+.edit-btn, .delete-btn {
+    background-color: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.edit-btn:hover {
+    color: var(--primary-color);
+    background-color: rgba(0, 255, 157, 0.1);
+}
+
+.delete-btn:hover {
+    color: var(--danger-color);
+    background-color: rgba(245, 101, 101, 0.1);
 } 
