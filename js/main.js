@@ -208,6 +208,9 @@ function setupEventListeners() {
     document.getElementById('addOrderProduct')?.addEventListener('click', addProductToQuote);
     document.getElementById('addOrderProductForm')?.addEventListener('submit', handleAddProductToQuote);
     document.getElementById('orderForm')?.addEventListener('submit', handleQuoteSubmit);
+
+    // Configurar listeners para campos de nome de produto
+    setupProductNameListeners();
 }
 
 // Navigation
@@ -397,14 +400,14 @@ function handleTransactionSubmit(e) {
         }
     }
 
-    // Calculate total
+    // Calculate total from the product.total values
     const total = currentTransactionProducts.reduce((sum, item) => sum + item.total, 0);
     console.log('Transaction total:', total); // Debug log
 
     try {
         // Update inventory only for stock products
         currentTransactionProducts.forEach(item => {
-            if (item.type === 'stock') { // Apenas produtos do estoque
+            if (item.isStock) { // Usando a propriedade isStock ao invés de type
                 const productIndex = inventoryItems.findIndex(invItem => invItem.code === item.code);
                 if (productIndex === -1) {
                     throw new Error(`Produto ${item.name} não encontrado no estoque!`);
@@ -500,7 +503,7 @@ function deleteTransaction(index) {
         
         // Reverse inventory changes only for stock products
         transaction.products.forEach(transactionProduct => {
-            if (transactionProduct.type === 'stock') {
+            if (transactionProduct.isStock) {
                 const product = inventoryItems.find(item => item.code === transactionProduct.code);
                 if (product) {
                     if (transaction.type === 'entry') {
@@ -719,51 +722,72 @@ function getLastTwelveMonths() {
 
 // Inventory Management Functions
 function renderInventoryTable() {
-    const tbody = inventoryTable.querySelector('tbody');
-    tbody.innerHTML = '';
-
+    const tableBody = document.querySelector('#inventoryTable tbody');
+    tableBody.innerHTML = '';
+    
+    if (inventoryItems.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="6" class="no-results">Nenhum produto cadastrado</td></tr>`;
+        return;
+    }
+    
     inventoryItems.forEach((item, index) => {
         const row = document.createElement('tr');
+        const total = item.quantity * item.price;
+        
         row.innerHTML = `
             <td>${item.code}</td>
-            <td>${item.name}</td>
+            <td>
+                ${item.name}
+                ${item.size ? 
+                    `<span class="product-size">(${item.size})</span>` : 
+                    requiresSize(item.name) ? '<span class="product-size missing-size">(Sem tamanho)</span>' : ''}
+            </td>
             <td>${item.quantity}</td>
             <td>R$ ${item.price.toFixed(2)}</td>
-            <td>R$ ${(item.price * item.quantity).toFixed(2)}</td>
+            <td>R$ ${total.toFixed(2)}</td>
             <td>
-                <button onclick="editItem(${index})" class="secondary-btn">
+                <button class="edit-btn" onclick="editItem(${index})">
                     <i class="material-icons">edit</i>
                 </button>
-                <button onclick="deleteItem(${index})" class="secondary-btn">
+                <button class="delete-btn" onclick="deleteItem(${index})">
                     <i class="material-icons">delete</i>
                 </button>
             </td>
         `;
-        tbody.appendChild(row);
+        
+        tableBody.appendChild(row);
     });
 }
 
 function handleProductSubmit(e) {
     e.preventDefault();
-
-    const formData = {
-        code: document.getElementById('productCode').value,
-        name: document.getElementById('productName').value,
-        quantity: parseInt(document.getElementById('productQuantity').value),
-        price: parseFloat(document.getElementById('productPrice').value)
+    const code = document.getElementById('productCode').value;
+    const name = document.getElementById('productName').value;
+    const quantity = document.getElementById('productQuantity').value;
+    const price = document.getElementById('productPrice').value;
+    const size = document.getElementById('productSize').value;
+    
+    const productData = {
+        code,
+        name,
+        quantity: parseInt(quantity),
+        price: parseFloat(price),
+        size: size || null
     };
-
-    if (productForm.dataset.mode === 'edit') {
-        const index = parseInt(productForm.dataset.editIndex);
-        inventoryItems[index] = formData;
+    
+    const editIndex = document.getElementById('productForm').getAttribute('data-edit-index');
+    
+    if (editIndex !== null && editIndex !== undefined && editIndex !== '') {
+        inventoryItems[parseInt(editIndex)] = productData;
     } else {
-        inventoryItems.push(formData);
+        inventoryItems.push(productData);
     }
-
+    
     saveToLocalStorage();
     renderInventoryTable();
-    updateDashboardStats();
     closeModal('productModal');
+    document.getElementById('productForm').reset();
+    document.getElementById('productForm').removeAttribute('data-edit-index');
 }
 
 function editItem(index) {
@@ -772,10 +796,18 @@ function editItem(index) {
     document.getElementById('productName').value = item.name;
     document.getElementById('productQuantity').value = item.quantity;
     document.getElementById('productPrice').value = item.price;
-
-    productForm.dataset.mode = 'edit';
-    productForm.dataset.editIndex = index;
-    openModal('edit');
+    
+    // Always try to initialize the size field for clothing/footwear items
+    const productType = requiresSize(item.name);
+    if (productType) {
+        toggleSizeField(item.name, 'productForm');
+        if (item.size) {
+            document.getElementById('productSize').value = item.size;
+        }
+    }
+    
+    document.getElementById('productForm').setAttribute('data-edit-index', index);
+    openModal('productModal');
 }
 
 function deleteItem(index) {
@@ -854,8 +886,9 @@ function addProductToQuote() {
     inventoryItems.forEach(item => {
         const option = document.createElement('option');
         option.value = item.code;
-        option.textContent = `${item.name} (${item.quantity} disponíveis)`;
+        option.textContent = `${item.name}${item.size ? ` (${item.size})` : ''} (${item.quantity} disponíveis)`;
         option.dataset.price = item.price;
+        option.dataset.size = item.size || '';
         select.appendChild(option);
     });
 
@@ -864,6 +897,18 @@ function addProductToQuote() {
         const selectedOption = this.options[this.selectedIndex];
         const defaultPrice = selectedOption.dataset.price || '';
         document.getElementById('orderProductPrice').value = defaultPrice;
+        
+        // If the product has a size, show it in the size field
+        const productId = this.value;
+        if (productId) {
+            const product = inventoryItems.find(item => item.code === productId);
+            if (product) {
+                toggleSizeField(product.name, 'addStockProductForm', product.size);
+                if (product.size) {
+                    document.getElementById('orderProductSize').value = product.size;
+                }
+            }
+        }
     };
 
     // Setup form submission
@@ -873,137 +918,121 @@ function addProductToQuote() {
     modal.classList.add('active');
 }
 
-function handleAddProductToQuote(e) {
-    e.preventDefault();
-    const isStockProduct = document.querySelector('.product-type-btn.active').dataset.type === 'stock';
-    
-    if (isStockProduct) {
-        handleAddStockProductToQuote();
-    } else {
-        handleAddOtherProductToQuote();
+function handleAddProductToQuote() {
+    const productId = document.getElementById('orderProductSelect').value;
+    if (!productId) {
+        alert('Por favor, selecione um produto.');
+        return;
     }
-}
-
-function handleAddStockProductToQuote() {
-    const productCode = document.getElementById('orderProductSelect').value;
-    const quantity = parseInt(document.getElementById('orderProductQuantity').value);
-    const price = parseFloat(document.getElementById('orderProductPrice').value);
-    const discount = parseFloat(document.getElementById('orderProductDiscount').value) || 0;
     
-    const product = inventoryItems.find(item => item.code === productCode);
+    const product = inventoryItems.find(item => item.code === productId);
     if (!product) {
-        alert('Produto não encontrado');
+        alert('Produto não encontrado no estoque.');
         return;
     }
     
-    if (quantity <= 0) {
-        alert('Quantidade deve ser maior que zero');
-        return;
-    }
-
-    if (price <= 0) {
-        alert('Preço deve ser maior que zero');
-        return;
-    }
-
-    if (discount < 0) {
-        alert('Desconto não pode ser negativo');
+    const quantity = parseInt(document.getElementById('orderProductQuantity').value);
+    if (!quantity || quantity <= 0) {
+        alert('Por favor, insira uma quantidade válida.');
         return;
     }
     
-    // Add product to quote
-    quoteProducts.push({
+    const price = parseFloat(document.getElementById('orderProductPrice').value);
+    if (!price || price <= 0) {
+        alert('Por favor, insira um preço válido.');
+        return;
+    }
+    
+    const discount = parseFloat(document.getElementById('orderProductDiscount').value) || 0;
+    const size = document.getElementById('orderProductSize').value || product.size || null;
+    
+    // Adicionar produto com tamanho, se aplicável
+    currentOrderProducts.push({
         code: product.code,
         name: product.name,
-        quantity: quantity,
-        price: price,
-        discount: discount,
-        total: (price * quantity) - discount,
-        type: 'stock'
+        quantity,
+        price,
+        discount,
+        size,
+        isStock: true
     });
     
-    // Update the table
     updateQuoteProductsTable();
-    
-    // Close the modal and reset form
     closeModal('addOrderProductModal');
 }
 
 function handleAddOtherProductToQuote() {
-    const name = document.getElementById('otherProductName').value.trim();
-    const quantity = parseInt(document.getElementById('otherProductQuantity').value);
-    const price = parseFloat(document.getElementById('otherProductPrice').value);
-    const discount = parseFloat(document.getElementById('otherProductDiscount').value) || 0;
-    
+    const name = document.getElementById('otherProductName').value;
     if (!name) {
-        alert('Por favor, informe o nome do produto');
+        alert('Por favor, insira o nome do produto.');
         return;
     }
     
-    if (quantity <= 0) {
-        alert('Quantidade deve ser maior que zero');
-        return;
-    }
-
-    if (price <= 0) {
-        alert('Preço deve ser maior que zero');
-        return;
-    }
-
-    if (discount < 0) {
-        alert('Desconto não pode ser negativo');
+    const quantity = parseInt(document.getElementById('otherProductQuantity').value);
+    if (!quantity || quantity <= 0) {
+        alert('Por favor, insira uma quantidade válida.');
         return;
     }
     
-    // Add product to quote
-    quoteProducts.push({
-        code: 'OUTRO-' + Date.now(),
-        name: name,
-        quantity: quantity,
-        price: price,
-        discount: discount,
-        total: (price * quantity) - discount,
-        type: 'other'
+    const price = parseFloat(document.getElementById('otherProductPrice').value);
+    if (!price || price <= 0) {
+        alert('Por favor, insira um preço válido.');
+        return;
+    }
+    
+    const discount = parseFloat(document.getElementById('otherProductDiscount').value) || 0;
+    const size = document.getElementById('otherOrderProductSize').value || null;
+    
+    // Adicionar produto com tamanho, se aplicável
+    currentOrderProducts.push({
+        name,
+        quantity,
+        price,
+        discount,
+        size,
+        isStock: false
     });
     
-    // Update the table
     updateQuoteProductsTable();
-    
-    // Close the modal and reset form
     closeModal('addOrderProductModal');
 }
 
 function updateQuoteProductsTable() {
-    const tbody = document.getElementById('orderProductsTable').querySelector('tbody');
-    tbody.innerHTML = '';
+    const tableBody = document.querySelector('#orderProductsTable tbody');
+    tableBody.innerHTML = '';
     
-    quoteProducts.forEach((item, index) => {
+    let totalAmount = 0;
+    
+    currentOrderProducts.forEach((product, index) => {
+        const productTotal = (product.quantity * product.price) - product.discount;
+        totalAmount += productTotal;
+        
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${item.name}</td>
-            <td>${item.quantity}</td>
-            <td>R$ ${item.price.toFixed(2)}</td>
-            <td>R$ ${item.discount.toFixed(2)}</td>
-            <td>R$ ${item.total.toFixed(2)}</td>
+            <td>${product.name}${product.size ? ` <span class="product-size">(${product.size})</span>` : ''}</td>
+            <td>${product.quantity}</td>
+            <td>R$ ${product.price.toFixed(2)}</td>
+            <td>R$ ${productTotal.toFixed(2)}</td>
             <td>
-                <button type="button" onclick="removeQuoteProduct(${index})" class="secondary-btn">
+                <button class="delete-btn" onclick="removeQuoteProduct(${index})">
                     <i class="material-icons">delete</i>
                 </button>
             </td>
         `;
-        tbody.appendChild(row);
+        
+        tableBody.appendChild(row);
     });
 }
 
 function removeQuoteProduct(index) {
-    quoteProducts.splice(index, 1);
+    currentOrderProducts.splice(index, 1);
     updateQuoteProductsTable();
 }
 
 function handleQuoteSubmit(e) {
     e.preventDefault();
     
-    if (quoteProducts.length === 0) {
+    if (currentOrderProducts.length === 0) {
         alert('Adicione pelo menos um produto ao orçamento');
         return;
     }
@@ -1018,95 +1047,101 @@ function handleQuoteSubmit(e) {
 
 // Atualiza a função generateQuote
 function generateQuote(client, seller) {
-    if (quoteProducts.length === 0) {
-        alert('Adicione produtos ao orçamento antes de gerar.');
-        return;
-    }
-
-    const total = quoteProducts.reduce((sum, item) => sum + item.total, 0);
-    const quote = {
-        date: new Date().toLocaleDateString(),
-        client,
-        seller,
-        items: quoteProducts,
-        total
-    };
-
-    // Create a printable version
-    const printWindow = window.open('', '', 'width=800,height=600');
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>Orçamento</title>
-                <style>
-                    body { 
-                        font-family: Arial, sans-serif; 
-                        padding: 20px; 
-                    }
-                    table { 
-                        width: 100%; 
-                        border-collapse: collapse; 
-                        margin: 20px 0; 
-                    }
-                    th, td { 
-                        padding: 10px; 
-                        border: 1px solid #ddd; 
-                        text-align: left; 
-                    }
-                    .header { 
-                        margin-bottom: 30px; 
-                    }
-                    .footer { 
-                        margin-top: 30px; 
-                    }
-                    .info {
-                        margin-bottom: 10px;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>Orçamento</h1>
-                    <div class="info">
-                        <p><strong>Data:</strong> ${quote.date}</p>
-                        <p><strong>Cliente:</strong> ${quote.client}</p>
-                        <p><strong>Vendedor:</strong> ${quote.seller}</p>
-                    </div>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Código</th>
-                            <th>Produto</th>
-                            <th>Quantidade</th>
-                            <th>Preço Unit.</th>
-                            <th>Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${quote.items.map(item => `
-                            <tr>
-                                <td>${item.code}</td>
-                                <td>${item.name}</td>
-                                <td>${item.quantity}</td>
-                                <td>R$ ${item.price.toFixed(2)}</td>
-                                <td>R$ ${item.total.toFixed(2)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                <div class="footer">
-                    <h3>Total: R$ ${quote.total.toFixed(2)}</h3>
-                    <p>Validade do orçamento: 7 dias</p>
-                    <br><br>
-                    <p>_______________________________</p>
-                    <p>Assinatura do Cliente</p>
-                </div>
-            </body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+    const doc = new jspdf.jsPDF();
+    const now = new Date();
+    const quoteNumber = 'ORC-' + now.getTime().toString().slice(-6);
+    
+    let yPos = 20;
+    const xPos = 15;
+    const lineHeight = 7;
+    
+    // Document title
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('ORÇAMENTO', doc.internal.pageSize.width / 2, yPos, { align: 'center' });
+    
+    yPos += lineHeight * 2;
+    
+    // Quote info
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Número: ${quoteNumber}`, xPos, yPos);
+    yPos += lineHeight;
+    
+    doc.text(`Data: ${now.toLocaleDateString()}`, xPos, yPos);
+    yPos += lineHeight;
+    
+    doc.text(`Cliente: ${client}`, xPos, yPos);
+    yPos += lineHeight;
+    
+    doc.text(`Vendedor: ${seller}`, xPos, yPos);
+    
+    yPos += lineHeight * 2;
+    
+    // Products table
+    const tableColumn = ['Produto', 'Tamanho', 'Qtd', 'Valor Unit.', 'Total'];
+    const tableRows = [];
+    
+    let total = 0;
+    
+    currentOrderProducts.forEach(product => {
+        const productTotal = (product.quantity * product.price) - product.discount;
+        total += productTotal;
+        
+        tableRows.push([
+            product.name,
+            product.size || '-',
+            product.quantity,
+            `R$ ${product.price.toFixed(2)}`,
+            `R$ ${productTotal.toFixed(2)}`
+        ]);
+    });
+    
+    doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: yPos,
+        theme: 'grid',
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [0, 170, 100] }
+    });
+    
+    yPos = doc.lastAutoTable.finalY + 10;
+    
+    // Total
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total: R$ ${total.toFixed(2)}`, doc.internal.pageSize.width - 20, yPos, { align: 'right' });
+    
+    yPos += lineHeight * 2;
+    
+    // Signature lines
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    
+    const signatureX1 = 40;
+    const signatureX2 = doc.internal.pageSize.width - 40;
+    const signatureWidth = 60;
+    
+    // Client signature
+    doc.line(signatureX1 - (signatureWidth / 2), yPos, signatureX1 + (signatureWidth / 2), yPos);
+    yPos += 5;
+    doc.text('Cliente', signatureX1, yPos, { align: 'center' });
+    
+    // Seller signature
+    doc.line(signatureX2 - (signatureWidth / 2), yPos - 5, signatureX2 + (signatureWidth / 2), yPos - 5);
+    doc.text('Vendedor', signatureX2, yPos, { align: 'center' });
+    
+    // Save and download
+    const fileName = `Orcamento_${quoteNumber}.pdf`;
+    doc.save(fileName);
+    
+    // Reset quote data
+    currentOrderProducts = [];
+    updateQuoteProductsTable();
+    
+    // Close modal
+    closeModal('orderModal');
 }
 
 // Report Functions
@@ -1136,18 +1171,27 @@ function generateSalesReport() {
 }
 
 function generateInventoryReport() {
-    const inventoryData = inventoryItems.map(item => ({
-        ...item,
-        total: item.price * item.quantity
-    }));
-
-    generateReport('Relatório de Estoque', inventoryData, [
-        { header: 'Código', key: 'code' },
-        { header: 'Produto', key: 'name' },
-        { header: 'Quantidade', key: 'quantity' },
-        { header: 'Preço Unit.', key: 'price', format: v => `R$ ${v.toFixed(2)}` },
-        { header: 'Valor Total', key: 'total', format: v => `R$ ${v.toFixed(2)}` }
-    ]);
+    const columns = [
+        { header: 'Código', dataKey: 'code' },
+        { header: 'Produto', dataKey: 'name' },
+        { header: 'Tamanho', dataKey: 'size' },
+        { header: 'Quantidade', dataKey: 'quantity' },
+        { header: 'Preço Unit.', dataKey: 'price' },
+        { header: 'Total', dataKey: 'total' }
+    ];
+    
+    const data = inventoryItems.map(item => {
+        return {
+            code: item.code,
+            name: item.name,
+            size: item.size || '-',
+            quantity: item.quantity,
+            price: `R$ ${item.price.toFixed(2)}`,
+            total: `R$ ${(item.quantity * item.price).toFixed(2)}`
+        };
+    });
+    
+    generateReport('Relatório de Estoque', data, columns);
 }
 
 function generateFinancialReport() {
@@ -1192,360 +1236,195 @@ function generateFinancialReport() {
 }
 
 function generateReport(title, data, columns) {
-    const printWindow = window.open('', '', 'width=800,height=600');
-    printWindow.document.write(`
-        <html>
-            <head>
-                <title>${title}</title>
-                <style>
-                    body { 
-                        font-family: Arial, sans-serif; 
-                        padding: 20px; 
-                    }
-                    h1 { 
-                        color: #333; 
-                        margin-bottom: 20px; 
-                    }
-                    table { 
-                        width: 100%; 
-                        border-collapse: collapse; 
-                        margin: 20px 0; 
-                    }
-                    th, td { 
-                        padding: 10px; 
-                        border: 1px solid #ddd; 
-                        text-align: left; 
-                    }
-                    th { 
-                        background-color: #f5f5f5; 
-                    }
-                    .header { 
-                        margin-bottom: 30px; 
-                    }
-                    .footer { 
-                        margin-top: 30px;
-                        font-size: 0.9em;
-                        color: #666;
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>${title}</h1>
-                    <p>Data de geração: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            ${columns.map(col => `<th>${col.header}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.map(row => `
-                            <tr>
-                                ${columns.map(col => `
-                                    <td>${col.format ? col.format(row[col.key]) : (row[col.key] || '-')}</td>
-                                `).join('')}
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-                <div class="footer">
-                    <p>Relatório gerado automaticamente pelo sistema.</p>
-                </div>
-            </body>
-        </html>
-    `);
-    printWindow.document.close();
-    printWindow.print();
+    const doc = new jspdf.jsPDF();
+    const now = new Date();
+    
+    let yPos = 20;
+    const xPos = 15;
+    const lineHeight = 7;
+    
+    // Document title
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text(title, doc.internal.pageSize.width / 2, yPos, { align: 'center' });
+    
+    yPos += lineHeight * 2;
+    
+    // Report date
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Data: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, xPos, yPos);
+    
+    yPos += lineHeight * 2;
+    
+    // Create table
+    const headers = columns.map(col => col.header);
+    const rows = data.map(item => {
+        return columns.map(col => item[col.dataKey]);
+    });
+    
+    doc.autoTable({
+        head: [headers],
+        body: rows,
+        startY: yPos,
+        theme: 'grid',
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [0, 170, 100] }
+    });
+    
+    yPos = doc.lastAutoTable.finalY + 10;
+    
+    // Add page number
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 10);
+    }
+    
+    // Save the report
+    doc.save(`${title.replace(/\s+/g, '_')}_${now.toISOString().split('T')[0]}.pdf`);
 }
 
 function exportReport() {
+    const doc = new jspdf.jsPDF();
     const now = new Date();
     
-    // Calcular estatísticas gerais
-    const totalInventoryValue = inventoryItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const totalProducts = inventoryItems.length;
-    const lowStockProducts = inventoryItems.filter(item => item.quantity < 10);
+    // Set font and color
+    doc.setFont('helvetica');
+    doc.setTextColor(40, 40, 40);
     
-    // Calcular estatísticas de vendas
-    const salesTransactions = transactions.filter(t => t.type === 'exit');
-    const totalSales = salesTransactions.reduce((sum, t) => sum + t.total, 0);
-    const averageTicket = salesTransactions.length > 0 ? totalSales / salesTransactions.length : 0;
+    // Title
+    doc.setFontSize(22);
+    doc.setFont(undefined, 'bold');
+    doc.text('RELATÓRIO COMPLETO', doc.internal.pageSize.width / 2, 20, { align: 'center' });
     
-    // Calcular estatísticas do mês atual
-    const thisMonth = now.getMonth();
-    const thisYear = now.getFullYear();
-    const currentMonthTransactions = transactions.filter(t => {
-        const tDate = new Date(t.date);
-        return tDate.getMonth() === thisMonth && tDate.getFullYear() === thisYear;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Gerado em: ${now.toLocaleDateString()} às ${now.toLocaleTimeString()}`, doc.internal.pageSize.width / 2, 30, { align: 'center' });
+    
+    // Financial Summary
+    let yPos = 50;
+    
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('Resumo Financeiro', doc.internal.pageSize.width / 2, yPos, { align: 'center' });
+    yPos += 10;
+    
+    // Calculate financial data
+    const financialData = getMonthlyData();
+    const currentMonth = new Date().getMonth();
+    const currentMonthData = financialData[currentMonth] || { revenue: 0, costs: 0, profit: 0 };
+    
+    // Financial metrics
+    doc.setFontSize(12);
+    const metrics = [
+        { label: 'Receita Total', value: `R$ ${currentMonthData.revenue.toFixed(2)}` },
+        { label: 'Custos Operacionais', value: `R$ ${currentMonthData.costs.toFixed(2)}` },
+        { label: 'Lucro Líquido', value: `R$ ${currentMonthData.profit.toFixed(2)}` },
+        { label: 'Margem de Lucro', value: `${currentMonthData.revenue > 0 ? ((currentMonthData.profit / currentMonthData.revenue) * 100).toFixed(2) : 0}%` }
+    ];
+    
+    metrics.forEach(metric => {
+        doc.setFont(undefined, 'bold');
+        doc.text(metric.label + ':', 20, yPos);
+        doc.setFont(undefined, 'normal');
+        doc.text(metric.value, 120, yPos);
+        yPos += 10;
     });
     
-    const monthlyRevenue = currentMonthTransactions
-        .filter(t => t.type === 'exit')
-        .reduce((sum, t) => sum + t.total, 0);
+    yPos += 10;
     
-    const monthlyCosts = currentMonthTransactions
-        .filter(t => t.type === 'entry')
-        .reduce((sum, t) => sum + t.total, 0);
+    // Inventory Summary
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('Resumo do Estoque', doc.internal.pageSize.width / 2, yPos, { align: 'center' });
+    yPos += 10;
     
-    const monthlyNetProfit = monthlyRevenue - monthlyCosts;
-    const monthlyMargin = monthlyRevenue > 0 ? (monthlyNetProfit / monthlyRevenue) * 100 : 0;
-
-    // Criar o relatório HTML
-    const printWindow = window.open('', '', 'width=800,height=600');
-    printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <title>Relatório Geral - ${now.toLocaleDateString()}</title>
-                <style>
-                    body {
-                        font-family: 'Segoe UI', Arial, sans-serif;
-                        line-height: 1.6;
-                        color: #333;
-                        max-width: 1200px;
-                        margin: 0 auto;
-                        padding: 20px;
-                        background-color: #f8f9fa;
-                    }
-                    .header {
-                        text-align: center;
-                        margin-bottom: 40px;
-                        padding: 20px;
-                        background: linear-gradient(135deg, #00FF9D 0%, #00A3FF 100%);
-                        color: white;
-                        border-radius: 10px;
-                        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-                    }
-                    .header h1 {
-                        margin: 0;
-                        font-size: 2.5em;
-                    }
-                    .header p {
-                        margin: 10px 0 0;
-                        opacity: 0.9;
-                    }
-                    .section {
-                        background: white;
-                        padding: 20px;
-                        margin-bottom: 20px;
-                        border-radius: 10px;
-                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-                    }
-                    .section h2 {
-                        color: #2D3748;
-                        border-bottom: 2px solid #00FF9D;
-                        padding-bottom: 10px;
-                        margin-top: 0;
-                    }
-                    .stats-grid {
-                        display: grid;
-                        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                        gap: 20px;
-                        margin-bottom: 20px;
-                    }
-                    .stat-card {
-                        background: #f8f9fa;
-                        padding: 20px;
-                        border-radius: 8px;
-                        border: 1px solid #e9ecef;
-                    }
-                    .stat-card h3 {
-                        margin: 0 0 10px;
-                        color: #4A5568;
-                        font-size: 0.9em;
-                        text-transform: uppercase;
-                    }
-                    .stat-card .value {
-                        font-size: 1.8em;
-                        font-weight: bold;
-                        color: #2D3748;
-                    }
-                    table {
-                        width: 100%;
-                        border-collapse: collapse;
-                        margin: 20px 0;
-                        background: white;
-                    }
-                    th, td {
-                        padding: 12px;
-                        text-align: left;
-                        border-bottom: 1px solid #e9ecef;
-                    }
-                    th {
-                        background-color: #f8f9fa;
-                        font-weight: 600;
-                        color: #4A5568;
-                    }
-                    tr:hover {
-                        background-color: #f8f9fa;
-                    }
-                    .alert {
-                        padding: 10px;
-                        background-color: #FFF5F5;
-                        border-left: 4px solid #F56565;
-                        margin: 10px 0;
-                    }
-                    .footer {
-                        text-align: center;
-                        margin-top: 40px;
-                        padding: 20px;
-                        color: #666;
-                        font-size: 0.9em;
-                    }
-                    @media print {
-                        body {
-                            background: white;
-                        }
-                        .section {
-                            break-inside: avoid;
-                        }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="header">
-                    <h1>Relatório Geral</h1>
-                    <p>Gerado em ${now.toLocaleDateString()} às ${now.toLocaleTimeString()}</p>
-                </div>
-
-                <div class="section">
-                    <h2>Resumo do Mês Atual</h2>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <h3>Ganhos</h3>
-                            <div class="value">R$ ${monthlyRevenue.toFixed(2)}</div>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Gastos</h3>
-                            <div class="value">R$ ${monthlyCosts.toFixed(2)}</div>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Lucro Líquido</h3>
-                            <div class="value">R$ ${monthlyNetProfit.toFixed(2)}</div>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Margem de Lucro</h3>
-                            <div class="value">${monthlyMargin.toFixed(2)}%</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="section">
-                    <h2>Visão Geral do Estoque</h2>
-                    <div class="stats-grid">
-                        <div class="stat-card">
-                            <h3>Valor Total em Estoque</h3>
-                            <div class="value">R$ ${totalInventoryValue.toFixed(2)}</div>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Total de Produtos</h3>
-                            <div class="value">${totalProducts}</div>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Produtos com Estoque Baixo</h3>
-                            <div class="value">${lowStockProducts.length}</div>
-                        </div>
-                        <div class="stat-card">
-                            <h3>Ticket Médio</h3>
-                            <div class="value">R$ ${averageTicket.toFixed(2)}</div>
-                        </div>
-                    </div>
-
-                    ${lowStockProducts.length > 0 ? `
-                        <div class="alert">
-                            <h3>⚠️ Produtos com Estoque Baixo (menos de 10 unidades):</h3>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Código</th>
-                                        <th>Produto</th>
-                                        <th>Quantidade</th>
-                                        <th>Valor Unit.</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${lowStockProducts.map(item => `
-                                        <tr>
-                                            <td>${item.code}</td>
-                                            <td>${item.name}</td>
-                                            <td>${item.quantity}</td>
-                                            <td>R$ ${item.price.toFixed(2)}</td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    ` : ''}
-                </div>
-
-                <div class="section">
-                    <h2>Produtos em Estoque</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Código</th>
-                                <th>Produto</th>
-                                <th>Quantidade</th>
-                                <th>Preço Unit.</th>
-                                <th>Valor Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${inventoryItems.map(item => `
-                                <tr>
-                                    <td>${item.code}</td>
-                                    <td>${item.name}</td>
-                                    <td>${item.quantity}</td>
-                                    <td>R$ ${item.price.toFixed(2)}</td>
-                                    <td>R$ ${(item.price * item.quantity).toFixed(2)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="section">
-                    <h2>Últimas Transações</h2>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Data</th>
-                                <th>Tipo</th>
-                                <th>Produto</th>
-                                <th>Quantidade</th>
-                                <th>Valor Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${transactions.slice(0, 10).map(t => `
-                                <tr>
-                                    <td>${new Date(t.date).toLocaleDateString()}</td>
-                                    <td>${t.type === 'entry' ? 'Entrada' : 'Saída'}</td>
-                                    <td>${t.products.map(p => p.name).join(', ')}</td>
-                                    <td>${t.products.reduce((sum, p) => sum + p.quantity, 0)}</td>
-                                    <td>R$ ${t.total.toFixed(2)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="footer">
-                    <p>Este relatório foi gerado automaticamente pelo sistema de controle.</p>
-                    <p>Para mais informações, consulte os relatórios específicos disponíveis no sistema.</p>
-                </div>
-            </body>
-        </html>
-    `);
+    // Inventory table
+    const inventoryColumns = [
+        { header: 'Código', dataKey: 'code' },
+        { header: 'Produto', dataKey: 'name' },
+        { header: 'Tamanho', dataKey: 'size' },
+        { header: 'Qtd.', dataKey: 'quantity' },
+        { header: 'Preço', dataKey: 'price' },
+        { header: 'Total', dataKey: 'total' }
+    ];
     
-    printWindow.document.close();
+    const inventoryRows = inventoryItems.map(item => {
+        return [
+            item.code,
+            item.name,
+            item.size || '-',
+            item.quantity,
+            `R$ ${item.price.toFixed(2)}`,
+            `R$ ${(item.quantity * item.price).toFixed(2)}`
+        ];
+    });
     
-    // Aguardar um momento para garantir que os estilos sejam aplicados
-    setTimeout(() => {
-        printWindow.print();
-    }, 500);
+    doc.autoTable({
+        head: [inventoryColumns.map(col => col.header)],
+        body: inventoryRows,
+        startY: yPos,
+        theme: 'grid',
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [0, 170, 100] }
+    });
+    
+    yPos = doc.lastAutoTable.finalY + 20;
+    
+    // Transaction Summary
+    if (yPos > doc.internal.pageSize.height - 60) {
+        doc.addPage();
+        yPos = 20;
+    }
+    
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('Últimas Transações', doc.internal.pageSize.width / 2, yPos, { align: 'center' });
+    yPos += 10;
+    
+    // Transaction table
+    const transactionColumns = [
+        { header: 'Data', dataKey: 'date' },
+        { header: 'Tipo', dataKey: 'type' },
+        { header: 'Produto', dataKey: 'product' },
+        { header: 'Tamanho', dataKey: 'size' },
+        { header: 'Qtd.', dataKey: 'quantity' },
+        { header: 'Valor', dataKey: 'value' }
+    ];
+    
+    const transactionRows = transactions.slice(-15).map(transaction => {
+        return [
+            new Date(transaction.date).toLocaleDateString(),
+            transaction.type === 'entry' ? 'Entrada' : 'Saída',
+            transaction.product.name,
+            transaction.product.size || '-',
+            transaction.product.quantity,
+            `R$ ${(transaction.product.price * transaction.product.quantity).toFixed(2)}`
+        ];
+    });
+    
+    doc.autoTable({
+        head: [transactionColumns.map(col => col.header)],
+        body: transactionRows,
+        startY: yPos,
+        theme: 'grid',
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [0, 170, 100] }
+    });
+    
+    // Add page numbers
+    const pageCount = doc.internal.getNumberOfPages();
+    for(let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.text(`Página ${i} de ${pageCount}`, doc.internal.pageSize.width - 20, doc.internal.pageSize.height - 10);
+    }
+    
+    // Save report
+    const fileName = `Relatorio_Completo_${now.toISOString().slice(0, 10)}.pdf`;
+    doc.save(fileName);
 }
 
 // Função para exportar backup
@@ -1671,9 +1550,10 @@ function generateOrderPDF(index) {
     // Update table position with multiple products
     doc.autoTable({
         startY: 82,
-        head: [['Produto', 'Quantidade', 'Valor Unit.', 'Desconto', 'Total']],
+        head: [['Produto', 'Tamanho', 'Quantidade', 'Valor Unit.', 'Desconto', 'Total']],
         body: transaction.products.map(product => [
             product.name,
+            product.size || '-',
             product.quantity.toString(),
             `R$ ${product.price.toFixed(2)}`,
             product.discount > 0 ? `R$ ${product.discount.toFixed(2)}` : '-',
@@ -1686,10 +1566,9 @@ function generateOrderPDF(index) {
 
     // Add total with installment information
     const finalY = doc.previousAutoTable.finalY + 10;
-    const totalAmount = transaction.products.reduce((sum, p) => sum + (p.quantity * p.price - p.discount), 0);
     
     doc.setFontSize(12);
-    doc.text(`Valor Total: R$ ${totalAmount.toFixed(2)}`, 150, finalY, { align: 'right' });
+    doc.text(`Valor Total: R$ ${transaction.total.toFixed(2)}`, 150, finalY, { align: 'right' });
     if (transaction.paymentMethod === 'credito' && transaction.installments > 1) {
         const monthlyAmount = transaction.total / transaction.installments;
         doc.setFontSize(10);
@@ -1821,8 +1700,9 @@ function showAddTransactionProductModal() {
     inventoryItems.forEach(item => {
         const option = document.createElement('option');
         option.value = item.code;
-        option.textContent = `${item.name} (${item.quantity} disponíveis)`;
+        option.textContent = `${item.name}${item.size ? ` (${item.size})` : ''} (${item.quantity} disponíveis)`;
         option.dataset.price = item.price;
+        option.dataset.size = item.size || '';
         select.appendChild(option);
     });
 
@@ -1851,125 +1731,122 @@ function handleAddProduct() {
 }
 
 function handleAddStockProduct() {
-    const productCode = document.getElementById('transactionProductSelect').value;
-    const quantity = parseInt(document.getElementById('transactionProductQuantity').value);
-    const price = parseFloat(document.getElementById('transactionProductPrice').value);
-    const discount = parseFloat(document.getElementById('transactionProductDiscount').value) || 0;
+    const productId = document.getElementById('transactionProductSelect').value;
+    if (!productId) {
+        alert('Por favor, selecione um produto.');
+        return;
+    }
     
-    const product = inventoryItems.find(item => item.code === productCode);
+    const product = inventoryItems.find(item => item.code === productId);
     if (!product) {
-        alert('Produto não encontrado');
+        alert('Produto não encontrado no estoque.');
         return;
     }
     
-    if (quantity <= 0) {
-        alert('Quantidade deve ser maior que zero');
-        return;
-    }
-
-    if (price <= 0) {
-        alert('Preço deve ser maior que zero');
-        return;
-    }
-
-    if (discount < 0) {
-        alert('Desconto não pode ser negativo');
-        return;
-    }
-
-    const transactionType = document.getElementById('transactionModal').dataset.type;
-    if (transactionType === 'exit' && quantity > product.quantity) {
-        alert('Quantidade indisponível em estoque!');
+    const quantity = parseInt(document.getElementById('transactionProductQuantity').value);
+    if (!quantity || quantity <= 0) {
+        alert('Por favor, insira uma quantidade válida.');
         return;
     }
     
-    // Add product to current transaction
+    const price = parseFloat(document.getElementById('transactionProductPrice').value);
+    if (!price || price <= 0) {
+        alert('Por favor, insira um preço válido.');
+        return;
+    }
+    
+    const discount = parseFloat(document.getElementById('transactionProductDiscount').value) || 0;
+    const size = document.getElementById('transactionProductSize').value || product.size || null;
+    
+    // Adicionar produto com tamanho, se aplicável
     currentTransactionProducts.push({
         code: product.code,
         name: product.name,
-        quantity: quantity,
-        price: price,
-        discount: discount,
-        total: (price * quantity) - discount,
-        type: 'stock'
+        quantity,
+        price,
+        discount,
+        size,
+        isStock: true
     });
     
-    // Update the table
     updateTransactionProductsTable();
-    
-    // Close the modal and reset form
     closeModal('addTransactionProductModal');
+    document.getElementById('transactionProductSelect').value = '';
+    document.getElementById('transactionProductQuantity').value = '1';
+    document.getElementById('transactionProductPrice').value = '';
+    document.getElementById('transactionProductDiscount').value = '0';
 }
 
 function handleAddOtherProduct() {
-    const name = document.getElementById('otherProductName').value.trim();
-    const quantity = parseInt(document.getElementById('otherProductQuantity').value);
-    const price = parseFloat(document.getElementById('otherProductPrice').value);
-    const discount = parseFloat(document.getElementById('otherProductDiscount').value) || 0;
-    
+    const name = document.getElementById('otherProductName').value;
     if (!name) {
-        alert('Por favor, informe o nome do produto');
+        alert('Por favor, insira o nome do produto.');
         return;
     }
     
-    if (quantity <= 0) {
-        alert('Quantidade deve ser maior que zero');
-        return;
-    }
-
-    if (price <= 0) {
-        alert('Preço deve ser maior que zero');
-        return;
-    }
-
-    if (discount < 0) {
-        alert('Desconto não pode ser negativo');
+    const quantity = parseInt(document.getElementById('otherProductQuantity').value);
+    if (!quantity || quantity <= 0) {
+        alert('Por favor, insira uma quantidade válida.');
         return;
     }
     
-    // Add product to current transaction
+    const price = parseFloat(document.getElementById('otherProductPrice').value);
+    if (!price || price <= 0) {
+        alert('Por favor, insira um preço válido.');
+        return;
+    }
+    
+    const discount = parseFloat(document.getElementById('otherProductDiscount').value) || 0;
+    const size = document.getElementById('otherProductSize').value || null;
+    
+    // Adicionar produto com tamanho, se aplicável
     currentTransactionProducts.push({
-        code: 'OUTRO-' + Date.now(),
-        name: name,
-        quantity: quantity,
-        price: price,
-        discount: discount,
-        total: (price * quantity) - discount,
-        type: 'other'
+        name,
+        quantity,
+        price,
+        discount,
+        size,
+        isStock: false
     });
     
-    // Update the table
     updateTransactionProductsTable();
-    
-    // Close the modal and reset form
     closeModal('addTransactionProductModal');
+    document.getElementById('otherProductName').value = '';
+    document.getElementById('otherProductQuantity').value = '1';
+    document.getElementById('otherProductPrice').value = '';
+    document.getElementById('otherProductDiscount').value = '0';
 }
 
 function updateTransactionProductsTable() {
-    const tbody = document.getElementById('transactionProductsTable').querySelector('tbody');
-    const totalElement = document.getElementById('transactionTotalAmount');
-    tbody.innerHTML = '';
+    const tableBody = document.querySelector('#transactionProductsTable tbody');
+    tableBody.innerHTML = '';
     
-    const total = currentTransactionProducts.reduce((sum, item) => sum + item.total, 0);
+    let totalAmount = 0;
     
-    currentTransactionProducts.forEach((item, index) => {
+    currentTransactionProducts.forEach((product, index) => {
+        const productTotal = (product.quantity * product.price) - product.discount;
+        // Add total property to each product for use in other functions
+        product.total = productTotal;
+        totalAmount += productTotal;
+        
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${item.name}</td>
-            <td>${item.quantity}</td>
-            <td>R$ ${item.price.toFixed(2)}</td>
-            <td>R$ ${item.discount.toFixed(2)}</td>
-            <td>R$ ${item.total.toFixed(2)}</td>
+            <td>${product.name}${product.size ? ` <span class="product-size">(${product.size})</span>` : ''}</td>
+            <td>${product.quantity}</td>
+            <td>R$ ${product.price.toFixed(2)}</td>
+            <td>R$ ${product.discount.toFixed(2)}</td>
+            <td>R$ ${productTotal.toFixed(2)}</td>
             <td>
-                <button type="button" onclick="removeTransactionProduct(${index})" class="secondary-btn">
+                <button class="delete-btn" onclick="removeTransactionProduct(${index})">
                     <i class="material-icons">delete</i>
                 </button>
             </td>
         `;
-        tbody.appendChild(row);
+        
+        tableBody.appendChild(row);
     });
     
-    totalElement.innerHTML = `<strong>R$ ${total.toFixed(2)}</strong>`;
+    document.getElementById('transactionTotalAmount').innerHTML = `<strong>R$ ${totalAmount.toFixed(2)}</strong>`;
 }
 
 function removeTransactionProduct(index) {
@@ -2098,4 +1975,97 @@ function setupSearchSections() {
         </button>
     `;
     transactionsTable.parentNode.insertBefore(transactionsSearchContainer, transactionsTable);
+}
+
+// Função para verificar se o produto requer tamanho
+function requiresSize(productName) {
+    if (!productName) return false;
+    
+    const clothingItems = ['blusa', 'camisa', 'camiseta', 'calça', 'bermuda', 'shorts'];
+    const footwearItems = ['bota', 'chinelo', 'sandália', 'sandalia', 'tênis', 'tenis', 'botina'];
+    
+    productName = productName.toLowerCase();
+    
+    if (clothingItems.some(item => productName.includes(item))) {
+        return 'clothing';
+    } else if (footwearItems.some(item => productName.includes(item))) {
+        return 'footwear';
+    }
+    
+    return false;
+}
+
+// Função para mostrar ou esconder o campo de tamanho
+function toggleSizeField(productName, formId, presetSize = null) {
+    const productType = requiresSize(productName);
+    const sizeFieldContainer = document.querySelector(`#${formId} .size-field-container`);
+    
+    if (!sizeFieldContainer) return;
+    
+    if (productType) {
+        sizeFieldContainer.style.display = 'block';
+        const sizeSelect = document.querySelector(`#${formId} .product-size-select`);
+        
+        // Limpar opções existentes
+        while (sizeSelect.options.length > 1) {
+            sizeSelect.remove(1);
+        }
+        
+        // Se estamos no formulário de saída e temos um produto com tamanho específico no estoque
+        if (formId === 'addStockProductForm' && presetSize) {
+            const option = document.createElement('option');
+            option.value = presetSize;
+            option.textContent = presetSize;
+            sizeSelect.appendChild(option);
+        } else {
+            // Adicionar tamanhos apropriados
+            if (productType === 'clothing') {
+                const sizes = ['PP', 'P', 'M', 'G', 'GG', 'XG', 'XGG', 'G1', 'G2', 'G3', 'G4', 'G5'];
+                sizes.forEach(size => {
+                    const option = document.createElement('option');
+                    option.value = size;
+                    option.textContent = size;
+                    sizeSelect.appendChild(option);
+                });
+            } else if (productType === 'footwear') {
+                for (let i = 31; i <= 48; i++) {
+                    const option = document.createElement('option');
+                    option.value = i.toString();
+                    option.textContent = i.toString();
+                    sizeSelect.appendChild(option);
+                }
+            }
+        }
+    } else {
+        sizeFieldContainer.style.display = 'none';
+    }
+}
+
+// Adicionar listener para nome do produto e atualizar campo de tamanho
+function setupProductNameListeners() {
+    // Para o formulário de produto
+    document.getElementById('productName').addEventListener('input', function(e) {
+        toggleSizeField(e.target.value, 'productForm');
+    });
+    
+    // Para o formulário de outros produtos na transação
+    document.getElementById('otherProductName').addEventListener('input', function(e) {
+        toggleSizeField(e.target.value, 'addOtherProductForm');
+    });
+    
+    // Para o formulário de produtos do estoque na transação
+    document.getElementById('transactionProductSelect').addEventListener('change', function() {
+        const productId = this.value;
+        if (productId) {
+            const product = inventoryItems.find(item => item.code === productId);
+            if (product) {
+                toggleSizeField(product.name, 'addStockProductForm', product.size);
+                
+                // Se o produto já tem um tamanho definido, usá-lo como padrão
+                if (product.size) {
+                    document.getElementById('transactionProductSize').value = product.size;
+                }
+            }
+        }
+    });
 } 
